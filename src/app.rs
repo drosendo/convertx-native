@@ -1274,7 +1274,7 @@ impl ConvertXApp {
                 );
 
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.small_button("✕").on_hover_text("Remove").clicked() {
+                    if ui.small_button("×").on_hover_text("Remove").clicked() {
                         remove = true;
                     }
 

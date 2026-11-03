@@ -13,8 +13,63 @@ pub const SUCCESS: Color32 = Color32::from_rgb(0x35, 0xc7, 0x8a);
 pub const WARN: Color32 = Color32::from_rgb(0xf0, 0xb7, 0x3f);
 pub const ERROR: Color32 = Color32::from_rgb(0xef, 0x5f, 0x6b);
 
+/// Fonts shipped with the OS that cover the symbols and scripts egui's built-in
+/// fonts miss (✕, ●, ⌘, and any non-Latin file name).
+fn system_font_candidates() -> &'static [&'static str] {
+    if cfg!(target_os = "macos") {
+        &[
+            "/System/Library/Fonts/Apple Symbols.ttf",
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+            "/System/Library/Fonts/Supplemental/Songti.ttc.ttf",
+            "/System/Library/Fonts/Geneva.ttf",
+        ]
+    } else if cfg!(target_os = "windows") {
+        &[
+            "C:/Windows/Fonts/seguisym.ttf",
+            "C:/Windows/Fonts/segoeui.ttf",
+        ]
+    } else {
+        // Linux and Android. .ttc collections are skipped: epaint cannot index them.
+        &[
+            "/system/fonts/NotoSansSymbols-Regular.ttf",
+            "/system/fonts/Roboto-Regular.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+            "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+        ]
+    }
+}
+
+fn load_system_fonts() -> Vec<(String, Vec<u8>)> {
+    system_font_candidates()
+        .iter()
+        .enumerate()
+        .filter_map(|(index, path)| std::fs::read(path).ok().map(|bytes| (index, bytes)))
+        .map(|(index, bytes)| (format!("system-fallback-{index}"), bytes))
+        .collect()
+}
+
+/// Installs the default fonts plus every usable system font as a fallback chain.
+fn install_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+
+    for (name, bytes) in load_system_fonts() {
+        fonts.font_data.insert(
+            name.clone(),
+            std::sync::Arc::new(egui::FontData::from_owned(bytes)),
+        );
+        for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+            fonts.families.entry(family).or_default().push(name.clone());
+        }
+    }
+
+    ctx.set_fonts(fonts);
+}
+
 pub fn apply(ctx: &egui::Context) {
     ctx.set_theme(egui::ThemePreference::Dark);
+    install_fonts(ctx);
     ctx.all_styles_mut(|style| {
         let mut visuals = egui::Visuals::dark();
 
@@ -96,4 +151,45 @@ pub fn card() -> Frame {
         .stroke(Stroke::new(1.0, BORDER))
         .corner_radius(CornerRadius::same(10))
         .inner_margin(Margin::same(12))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every non-ASCII character the interface renders must have a glyph,
+    /// otherwise buttons show up blank — which is how the remove button broke.
+    #[test]
+    fn ui_symbols_have_glyphs() {
+        const SYMBOLS: &str = "…→—●·⌘×−";
+
+        let ctx = egui::Context::default();
+        apply(&ctx);
+
+        // Fonts are built on the first pass.
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::pos2(0.0, 0.0),
+                egui::vec2(400.0, 300.0),
+            )),
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| {
+            ui.label("warm up the fonts × ● ⌘ − → … — ·");
+        });
+        output.textures_delta.clear();
+
+        let font_id = egui::FontId::proportional(14.0);
+        let missing: Vec<char> = ctx.fonts_mut(|fonts| {
+            SYMBOLS
+                .chars()
+                .filter(|symbol| !fonts.has_glyph(&font_id, *symbol))
+                .collect()
+        });
+
+        assert!(
+            missing.is_empty(),
+            "no glyph for {missing:?} — check the system font fallback in theme::apply"
+        );
+    }
 }
