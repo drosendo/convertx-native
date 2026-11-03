@@ -16,7 +16,7 @@ cargo build --release
 
 echo "Rendering the icon…"
 mkdir -p build
-"target/release/convertx" --to png --via native-svg --out build build/icon.svg >/dev/null
+"target/release/convertx" --to png --via native-svg --out build assets/icon.svg >/dev/null
 
 ICON_PNG="$(ls -t build/icon*.png | head -1)"
 ICONSET="build/$APP_NAME.iconset"
