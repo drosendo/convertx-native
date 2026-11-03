@@ -2,7 +2,21 @@ use crate::convert::ConvertOptions;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// Set on Android, where the app cannot see a normal home directory.
+static BASE_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+pub fn set_base_dir(path: PathBuf) {
+    let _ = BASE_DIR.set(path);
+}
+
+fn base_dir() -> Option<&'static PathBuf> {
+    BASE_DIR.get()
+}
+
 pub fn home_dir() -> PathBuf {
+    if let Some(base) = base_dir() {
+        return base.clone();
+    }
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
@@ -12,6 +26,9 @@ pub fn home_dir() -> PathBuf {
 /// `~/Library/Application Support/ConvertX` on macOS, `%APPDATA%\ConvertX` on
 /// Windows and `~/.config/convertx` elsewhere.
 pub fn config_dir() -> PathBuf {
+    if let Some(base) = base_dir() {
+        return base.join("config");
+    }
     if cfg!(target_os = "macos") {
         home_dir().join("Library/Application Support/ConvertX")
     } else if cfg!(target_os = "windows") {
@@ -28,6 +45,9 @@ pub fn config_dir() -> PathBuf {
 }
 
 pub fn default_output_dir() -> PathBuf {
+    if let Some(base) = base_dir() {
+        return base.join("ConvertX");
+    }
     let downloads = home_dir().join("Downloads");
     if downloads.is_dir() {
         downloads.join("ConvertX")

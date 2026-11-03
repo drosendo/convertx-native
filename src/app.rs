@@ -1107,19 +1107,13 @@ impl ConvertXApp {
     }
 
     fn pick_files(&mut self) {
-        if let Some(files) = rfd::FileDialog::new()
-            .set_title("Choose files to convert")
-            .pick_files()
-        {
+        if let Some(files) = crate::dialogs::pick_files() {
             self.add_paths(files);
         }
     }
 
     fn pick_folder(&mut self) {
-        if let Some(dir) = rfd::FileDialog::new()
-            .set_title("Choose a folder of files")
-            .pick_folder()
-        {
+        if let Some(dir) = crate::dialogs::pick_folder() {
             self.add_paths(vec![dir]);
         }
     }
@@ -1682,9 +1676,7 @@ impl ConvertXApp {
                 )
                 .on_hover_text(dir.to_string_lossy().to_string())
                 .clicked()
-                && let Some(folder) = rfd::FileDialog::new()
-                    .set_title("Choose output folder")
-                    .pick_folder()
+                && let Some(folder) = crate::dialogs::pick_folder()
             {
                 self.settings.output_dir = folder.to_string_lossy().into_owned();
                 self.settings.save();
@@ -2039,9 +2031,8 @@ impl ConvertXApp {
                     });
 
                     if let Some(binary) = locate
-                        && let Some(path) = rfd::FileDialog::new()
-                            .set_title(format!("Locate {binary}"))
-                            .pick_file()
+                        && let Some(path) =
+                            crate::dialogs::pick_file(&format!("Locate {binary}"))
                         {
                             self.settings
                                 .custom_paths

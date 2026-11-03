@@ -89,10 +89,13 @@ fn load_converters() -> Vec<ConverterSpec> {
         .expect("assets/native.json is embedded at build time and must be valid");
 
     let platform = current_platform();
+    // Android cannot spawn external tools, so only the built-in engines apply.
+    let android = cfg!(target_os = "android");
     upstream
         .converters
         .into_iter()
         .chain(native.converters)
+        .filter(|spec| !android || spec.builtin)
         .filter(|spec| spec.platforms.is_empty() || spec.platforms.iter().any(|p| p == platform))
         .map(strip_pixel_dump_targets)
         .map(canonicalise)

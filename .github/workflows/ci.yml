@@ -51,3 +51,22 @@ jobs:
 
       - name: Release build
         run: cargo build --release
+
+  android-check:
+    name: Android compile check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: android
+
+      - name: Check the Android build compiles
+        run: cargo check --target aarch64-linux-android --lib

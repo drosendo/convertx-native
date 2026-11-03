@@ -1,18 +1,8 @@
-use std::process::Command;
-
-mod app;
-mod cli;
-mod convert;
-mod history;
-mod native;
-mod optimize;
-mod registry;
-mod settings;
-mod theme;
-mod tools;
-mod vcf;
+use convertx::{app, cli};
+use eframe::egui;
 
 fn main() -> eframe::Result {
+    // `--to` / `--optimize` run without opening a window.
     if let Some(code) = cli::maybe_run() {
         std::process::exit(code);
     }
@@ -30,15 +20,4 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| Ok(Box::new(app::ConvertXApp::new(cc)))),
     )
-}
-
-pub fn open_in_file_manager(path: &std::path::Path) {
-    let mut cmd = if cfg!(target_os = "macos") {
-        Command::new("open")
-    } else if cfg!(target_os = "windows") {
-        Command::new("explorer")
-    } else {
-        Command::new("xdg-open")
-    };
-    let _ = cmd.arg(path).spawn();
 }

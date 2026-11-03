@@ -28,6 +28,8 @@ jobs:
             artifact: linux-x64
           - os: windows-2022
             artifact: windows-x64
+          - os: ubuntu-22.04
+            artifact: android
     steps:
       - uses: actions/checkout@v4
 
@@ -36,9 +38,16 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.artifact }}
+
+      - name: Version
+        id: version
+        shell: bash
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Linux windowing libraries
-        if: runner.os == 'Linux'
+        if: matrix.artifact == 'linux-x64'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -46,14 +55,9 @@ jobs:
             libxi-dev libxrandr-dev libgl1-mesa-dev
 
       - name: Build
+        if: matrix.artifact != 'android'
         run: cargo build --release --locked
 
-      - name: Version
-        id: version
-        shell: bash
-        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      # ---------------------------------------------------------------- macOS
       - name: Package macOS app bundle
         if: runner.os == 'macOS'
         run: |
@@ -61,9 +65,8 @@ jobs:
           ditto -c -k --keepParent dist/ConvertX.app \
             "dist/ConvertX-${{ steps.version.outputs.value }}-${{ matrix.artifact }}.zip"
 
-      # ---------------------------------------------------------------- Linux
       - name: Package Linux
-        if: runner.os == 'Linux'
+        if: matrix.artifact == 'linux-x64'
         run: |
           name="convertx-${{ steps.version.outputs.value }}-linux-x64"
           mkdir -p "dist/$name"
@@ -71,9 +74,8 @@ jobs:
           tar -czf "dist/$name.tar.gz" -C dist "$name"
           rm -rf "dist/$name"
 
-      # -------------------------------------------------------------- Windows
       - name: Package Windows
-        if: runner.os == 'Windows'
+        if: matrix.artifact == 'windows-x64'
         shell: pwsh
         run: |
           $name = "convertx-${{ steps.version.outputs.value }}-windows-x64"
@@ -81,11 +83,30 @@ jobs:
           Copy-Item target/release/convertx.exe, README.md, LICENSE, CREDITS.md "dist/$name"
           Compress-Archive -Path "dist/$name/*" -DestinationPath "dist/$name.zip"
 
+      - name: Android toolchain
+        if: matrix.artifact == 'android'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zip openjdk-17-jdk-headless
+          cargo install cargo-ndk --locked
+          rustup target add aarch64-linux-android armv7-linux-androideabi
+
+      - name: Package Android APK
+        if: matrix.artifact == 'android'
+        run: |
+          export ANDROID_NDK_HOME="$(ls -d "$ANDROID_HOME"/ndk/* | sort -V | tail -1)"
+          echo "NDK: $ANDROID_NDK_HOME"
+          ./tools/package_android.sh
+          mv dist/ConvertX-*.apk "dist/ConvertX-${{ steps.version.outputs.value }}-android.apk"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/*.apk
           if-no-files-found: error
 
   publish:
