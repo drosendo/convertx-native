@@ -425,22 +425,34 @@ fn run_child(mut command: Command, timeout_secs: u64) -> std::io::Result<ChildOu
         .stderr(std::process::Stdio::piped());
     let mut child = command.spawn()?;
 
-    let mut stdout_pipe = child.stdout.take();
-    let mut stderr_pipe = child.stderr.take();
-    let stdout_reader = std::thread::spawn(move || {
-        let mut buffer = Vec::new();
-        if let Some(pipe) = stdout_pipe.as_mut() {
-            let _ = pipe.read_to_end(&mut buffer);
-        }
-        buffer
-    });
-    let stderr_reader = std::thread::spawn(move || {
-        let mut buffer = Vec::new();
-        if let Some(pipe) = stderr_pipe.as_mut() {
-            let _ = pipe.read_to_end(&mut buffer);
-        }
-        buffer
-    });
+    // Pipe readers report through a channel: a killed converter can leave a
+    // grandchild holding the pipe open, and joining it would block forever.
+    let (tx, rx) = std::sync::mpsc::channel();
+    let spawn_reader = |index: usize, mut pipe: Option<Box<dyn Read + Send>>| {
+        let sender = tx.clone();
+        std::thread::spawn(move || {
+            let mut buffer = Vec::new();
+            if let Some(pipe) = pipe.as_mut() {
+                let _ = pipe.read_to_end(&mut buffer);
+            }
+            let _ = sender.send((index, buffer));
+        });
+    };
+    spawn_reader(
+        0,
+        child
+            .stdout
+            .take()
+            .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+    );
+    spawn_reader(
+        1,
+        child
+            .stderr
+            .take()
+            .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+    );
+    drop(tx);
 
     let deadline = if timeout_secs == 0 {
         None
@@ -456,21 +468,46 @@ fn run_child(mut command: Command, timeout_secs: u64) -> std::io::Result<ChildOu
             Err(err) => return Err(err),
         }
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-            let _ = child.kill();
+            kill_tree(&mut child);
             timed_out = true;
             break child.wait()?;
         }
         std::thread::sleep(Duration::from_millis(40));
     };
 
-    let stdout = stdout_reader.join().unwrap_or_default();
-    let stderr = stderr_reader.join().unwrap_or_default();
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let collect =
+        |stream: usize, buffer: Vec<u8>| -> Option<(usize, Vec<u8>)> { Some((stream, buffer)) };
+    let _ = collect;
+    let grace = Instant::now() + Duration::from_millis(500);
+    while Instant::now() < grace {
+        match rx.recv_timeout(Duration::from_millis(50)) {
+            Ok((0, buffer)) => stdout = buffer,
+            Ok((_, buffer)) => stderr = buffer,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
     Ok(ChildOutput {
         status,
         stdout,
         stderr,
         timed_out,
     })
+}
+
+/// Stops a converter and anything it spawned, so its pipes are released.
+fn kill_tree(child: &mut std::process::Child) {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/F", "/T", "/PID"])
+            .arg(child.id().to_string())
+            .output();
+    }
+    let _ = child.kill();
 }
 
 fn cleanup(dir: Option<&Path>) {
