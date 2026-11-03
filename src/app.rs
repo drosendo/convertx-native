@@ -5,6 +5,7 @@ use crate::registry::{ConverterSpec, Registry, human_size, normalize_input, norm
 use crate::settings::Settings;
 use crate::theme;
 use crate::tools::{self, PackageManager, Toolchain};
+use crate::update::{self, ReleaseInfo};
 use eframe::egui;
 use egui::{
     Align, Align2, Color32, CornerRadius, FontId, Layout, RichText, Sense, Stroke, StrokeKind,
@@ -84,6 +85,7 @@ enum Event {
         id: u64,
         outcome: OptimizeOutcome,
     },
+    UpdateChecked(Box<Result<Option<ReleaseInfo>, String>>),
     JobFinished {
         id: u64,
         converter: String,
@@ -157,6 +159,9 @@ pub struct ConvertXApp {
     last_output_dir: Option<PathBuf>,
     drag_hover: bool,
     mode: Mode,
+    checking_updates: bool,
+    update: Option<ReleaseInfo>,
+    update_status: String,
     optimize: OptimizeOptions,
     optimize_in_place: bool,
     optimize_backup: bool,
@@ -176,7 +181,25 @@ impl ConvertXApp {
             app.add_paths(initial);
         }
         app.detect_tools(&cc.egui_ctx);
+        if app.settings.check_updates {
+            app.check_updates(&cc.egui_ctx);
+        }
         app
+    }
+
+    fn check_updates(&mut self, ctx: &egui::Context) {
+        if self.checking_updates {
+            return;
+        }
+        self.checking_updates = true;
+        self.update_status = "Checking for updates…".into();
+        let tx = self.events_tx.clone();
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            let result = update::check();
+            let _ = tx.send(Event::UpdateChecked(Box::new(result)));
+            ctx.request_repaint();
+        });
     }
 
     fn build(settings: Settings) -> Self {
@@ -211,6 +234,9 @@ impl ConvertXApp {
             last_output_dir: None,
             drag_hover: false,
             mode: Mode::Convert,
+            checking_updates: false,
+            update: None,
+            update_status: String::new(),
             optimize: OptimizeOptions::default(),
             optimize_in_place: false,
             optimize_backup: false,
@@ -906,6 +932,32 @@ impl ConvertXApp {
                     self.batch_done += 1;
                     if self.batch_done >= self.batch_total {
                         self.finish_batch();
+                    }
+                }
+                Event::UpdateChecked(result) => {
+                    self.checking_updates = false;
+                    match *result {
+                        Ok(Some(release)) => {
+                            self.update_status =
+                                format!("Version {} is available", release.version);
+                            self.push_log(format!(
+                                "Update available: {} (running {})",
+                                release.version,
+                                update::CURRENT_VERSION
+                            ));
+                            self.update = Some(release);
+                        }
+                        Ok(None) => {
+                            self.update_status = format!(
+                                "You are on the latest version ({})",
+                                update::CURRENT_VERSION
+                            );
+                            self.update = None;
+                        }
+                        Err(err) => {
+                            self.update_status = err;
+                            self.update = None;
+                        }
                     }
                 }
                 Event::InstallLine(line) => {
@@ -2007,6 +2059,91 @@ impl ConvertXApp {
                             .on_hover_text("A hung converter is killed so the batch keeps going");
                             ui.end_row();
                         });
+
+                    ui.add_space(14.0);
+                    ui.separator();
+                    ui.add_space(6.0);
+                    ui.label(RichText::new("Updates").size(15.0).strong());
+                    ui.label(
+                        RichText::new(format!("You are running version {}", update::CURRENT_VERSION))
+                            .size(11.0)
+                            .color(theme::MUTED),
+                    );
+                    ui.add_space(4.0);
+
+                    ui.horizontal(|ui| {
+                        if ui.small_button("Check now").clicked() {
+                            self.check_updates(ctx);
+                        }
+                        ui.checkbox(
+                            &mut self.settings.check_updates,
+                            "Check automatically when the app starts",
+                        );
+                        if self.checking_updates {
+                            ui.spinner();
+                        }
+                    });
+
+                    if !self.update_status.is_empty() {
+                        ui.label(
+                            RichText::new(&self.update_status)
+                                .size(10.5)
+                                .color(theme::MUTED),
+                        );
+                    }
+
+                    if let Some(release) = self.update.clone() {
+                        ui.add_space(4.0);
+                        let label = if release.action_label() == "Install and restart" {
+                            "Install and restart".to_string()
+                        } else {
+                            "Open download page".to_string()
+                        };
+                        ui.horizontal(|ui| {
+                            if ui
+                                .add(
+                                    egui::Button::new(
+                                        RichText::new(label).size(12.0).color(Color32::WHITE),
+                                    )
+                                    .fill(theme::SUCCESS)
+                                    .stroke(Stroke::NONE),
+                                )
+                                .clicked()
+                            {
+                                if update::can_self_update() {
+                                    match update::install(&release) {
+                                        Ok(()) => {
+                                            self.settings.save();
+                                            // The helper waits for this process to exit.
+                                            std::process::exit(0);
+                                        }
+                                        Err(err) => {
+                                            self.update_status = format!("{err} — opening the page instead");
+                                            update::open_page(&release.page_url);
+                                        }
+                                    }
+                                } else {
+                                    update::open_page(&release.page_url);
+                                }
+                            }
+                            if ui.small_button("What changed").clicked() {
+                                update::open_page(&release.page_url);
+                            }
+                        });
+                        if !release.notes.trim().is_empty() {
+                            ui.add_space(4.0);
+                            egui::ScrollArea::vertical()
+                                .max_height(96.0)
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    ui.label(
+                                        RichText::new(tools::truncate(&release.notes, 900))
+                                            .size(10.5)
+                                            .color(theme::MUTED),
+                                    );
+                                });
+                        }
+                    }
 
                     ui.add_space(12.0);
                     ui.label(

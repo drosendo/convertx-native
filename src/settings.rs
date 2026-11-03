@@ -73,6 +73,8 @@ pub struct Settings {
     pub jpeg_quality: u8,
     /// Kill a converter that runs longer than this. Zero means no limit.
     pub convert_timeout_secs: u64,
+    /// Ask GitHub for a newer release on startup.
+    pub check_updates: bool,
     pub open_output_after: bool,
     pub record_history: bool,
     pub last_target: String,
@@ -90,6 +92,7 @@ impl Default for Settings {
             svg_scale: 1.0,
             jpeg_quality: 90,
             convert_timeout_secs: 1800,
+            check_updates: true,
             open_output_after: false,
             record_history: true,
             last_target: String::new(),

@@ -108,6 +108,26 @@ convertx --help
 Exit code is `0` when every file succeeded and `1` when any file failed, so it drops into scripts and
 CI without extra glue.
 
+## Updates
+
+The app checks `github.com/drosendo/convertx-native/releases/latest` once at startup and shows a green
+**Update 0.2.0** badge in the header when something newer exists. Settings → **Updates** has the version,
+a **Check now** button, the release notes, and:
+
+- **Install and restart** (macOS bundle): downloads the release asset, unpacks it, and hands a small
+  helper script the job of swapping `/Applications/ConvertX.app` once the current process exits. If the
+  archive is broken nothing is replaced.
+- **Open download page** (Windows, Linux, Android): the platform archives replace themselves badly, so
+  the page is opened instead.
+
+Turn the startup check off with the checkbox, or run it from a script:
+
+```bash
+convertx --check-updates
+```
+
+No telemetry, no account, and the only network call is that one release lookup.
+
 ## Keyboard
 
 | Shortcut | Action |

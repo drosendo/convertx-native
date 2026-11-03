@@ -27,6 +27,7 @@ OPTIONS
   --in-place         replace the original files when optimizing
   --backup           keep a .orig copy when optimizing in place
   --list             show converters and whether they are installed
+  --check-updates    ask GitHub whether a newer release exists
   --help             this message
 
 EXAMPLES
@@ -46,6 +47,7 @@ struct Args {
     in_place: bool,
     backup: bool,
     list: bool,
+    check_updates: bool,
     help: bool,
     files: Vec<PathBuf>,
 }
@@ -100,6 +102,7 @@ fn parse(args: &[String]) -> Result<Args, String> {
             "--in-place" | "-i" => parsed.in_place = true,
             "--backup" => parsed.backup = true,
             "--list" | "-l" => parsed.list = true,
+            "--check-updates" => parsed.check_updates = true,
             "--help" | "-h" => parsed.help = true,
             other if other.starts_with('-') => {
                 return Err(format!("Unknown option '{other}' — try --help"));
@@ -139,6 +142,10 @@ pub fn maybe_run() -> Option<i32> {
     if parsed.list {
         list(&tools);
         return Some(0);
+    }
+
+    if parsed.check_updates {
+        return Some(check_updates());
     }
 
     if parsed.files.is_empty() {
@@ -304,6 +311,31 @@ fn optimize_files(parsed: &Args, settings: &Settings) -> i32 {
         println!("\nSaved {} in total", human_size(saved_total));
     }
     if failures == 0 { 0 } else { 1 }
+}
+
+fn check_updates() -> i32 {
+    match crate::update::check() {
+        Ok(Some(release)) => {
+            println!(
+                "Update available: {} (running {})",
+                release.version,
+                crate::update::CURRENT_VERSION
+            );
+            println!("{}", release.page_url);
+            0
+        }
+        Ok(None) => {
+            println!(
+                "Up to date ({} is the latest release)",
+                crate::update::CURRENT_VERSION
+            );
+            0
+        }
+        Err(err) => {
+            eprintln!("error: {err}");
+            1
+        }
+    }
 }
 
 fn list(tools: &Toolchain) {
