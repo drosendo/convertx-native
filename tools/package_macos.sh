@@ -11,12 +11,22 @@ VERSION="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
 DIST="dist"
 APP="$DIST/$APP_NAME.app"
 
-echo "Building release binary…"
-cargo build --release
+# Set TARGET to cross-build, e.g. TARGET=x86_64-apple-darwin on Apple silicon.
+TARGET="${TARGET:-}"
+if [ -n "$TARGET" ]; then
+  rustup target add "$TARGET" >/dev/null 2>&1 || true
+  BIN="target/$TARGET/release/convertx"
+  echo "Building release binary for $TARGET…"
+  cargo build --release --target "$TARGET"
+else
+  BIN="target/release/convertx"
+  echo "Building release binary…"
+  cargo build --release
+fi
 
 echo "Rendering the icon…"
 mkdir -p build
-"target/release/convertx" --to png --via native-svg --out build assets/icon.svg >/dev/null
+"$BIN" --to png --via native-svg --out build assets/icon.svg >/dev/null
 
 ICON_PNG="$(ls -t build/icon*.png | head -1)"
 ICONSET="build/$APP_NAME.iconset"
@@ -32,7 +42,7 @@ iconutil -c icns "$ICONSET" -o "build/$APP_NAME.icns"
 echo "Assembling ${APP}…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp target/release/convertx "$APP/Contents/MacOS/convertx"
+cp "$BIN" "$APP/Contents/MacOS/convertx"
 cp "build/$APP_NAME.icns" "$APP/Contents/Resources/$APP_NAME.icns"
 cp LICENSE CREDITS.md README.md "$APP/Contents/Resources/"
 

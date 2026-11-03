@@ -20,10 +20,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Both macOS builds run on Apple silicon: Intel runners queue for a
+          # long time and macOS 13 is being retired.
           - os: macos-14
             artifact: macos-arm64
-          - os: macos-13
+            target: aarch64-apple-darwin
+          - os: macos-14
             artifact: macos-x64
+            target: x86_64-apple-darwin
           - os: ubuntu-22.04
             artifact: linux-x64
           - os: windows-2022
@@ -59,10 +63,12 @@ jobs:
 
       - name: Build
         if: matrix.artifact != 'android'
-        run: cargo build --release --locked
+        run: cargo build --release --locked ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }}
 
       - name: Package macOS app bundle
         if: runner.os == 'macOS'
+        env:
+          TARGET: ${{ matrix.target }}
         run: |
           ./tools/package_macos.sh
           ditto -c -k --keepParent dist/ConvertX.app \
