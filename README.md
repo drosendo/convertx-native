@@ -17,7 +17,6 @@ Prebuilt releases are on the [releases page](https://github.com/drosendo/convert
 | Platform | File | Notes |
 | --- | --- | --- |
 | macOS 11+ (Apple silicon) | `ConvertX-*-macos-arm64.zip` | unzip, drag into `/Applications` |
-| macOS 11+ (Intel) | `ConvertX-*-macos-x64.zip` | same |
 | Windows 10+ | `convertx-*-windows-x64.zip` | unzip, run `convertx.exe` |
 | Linux (glibc) | `convertx-*-linux-x64.tar.gz` | `tar xzf`, run `./convertx` |
 | Android | `ConvertX-*-android.apk` | built-in engines only, see [Android](#android) |
@@ -150,6 +149,10 @@ You can also launch without the bundle:
 ```bash
 cargo run --release            # or: ./target/release/convertx
 ```
+
+Intel Macs are not in the release matrix yet — runners for them queue for tens of minutes and macOS 13
+is being retired. Build locally on an Intel Mac, or cross-compile on Apple silicon with
+`TARGET=x86_64-apple-darwin ./tools/package_macos.sh`.
 
 ## Configuration
 

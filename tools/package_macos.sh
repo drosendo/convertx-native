@@ -16,7 +16,7 @@ TARGET="${TARGET:-}"
 if [ -n "$TARGET" ]; then
   rustup target add "$TARGET" >/dev/null 2>&1 || true
   BIN="target/$TARGET/release/convertx"
-  echo "Building release binary for $TARGET…"
+  echo "Building release binary for ${TARGET}…"
   cargo build --release --target "$TARGET"
 else
   BIN="target/release/convertx"

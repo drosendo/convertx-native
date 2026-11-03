@@ -20,14 +20,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Both macOS builds run on Apple silicon: Intel runners queue for a
-          # long time and macOS 13 is being retired.
+          # Apple silicon only for now: Intel runners queue for tens of minutes
+          # and macOS 13 is being retired. package_macos.sh still accepts
+          # TARGET=x86_64-apple-darwin for anyone who wants that build.
           - os: macos-14
             artifact: macos-arm64
             target: aarch64-apple-darwin
-          - os: macos-14
-            artifact: macos-x64
-            target: x86_64-apple-darwin
           - os: ubuntu-22.04
             artifact: linux-x64
           - os: windows-2022
