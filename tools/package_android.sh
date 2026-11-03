@@ -59,7 +59,13 @@ mkdir -p build dist
   --version-name "$VERSION"
 
 echo "Adding native libraries…"
-(cd android/lib && zip -q -r "../../build/base.apk" lib)
+if ! ls android/lib/*/lib*.so >/dev/null 2>&1; then
+  echo "error: cargo-ndk produced no shared library" >&2
+  find android/lib -type f 2>/dev/null || true
+  exit 1
+fi
+# cargo-ndk writes android/lib/<abi>/libconvertx.so; the APK wants lib/<abi>/…
+(cd android && zip -q -r "../build/base.apk" lib)
 
 echo "Aligning…"
 "$BUILD_TOOLS/zipalign" -f -p 4 build/base.apk build/aligned.apk
