@@ -21,7 +21,11 @@ pub struct HistoryEntry {
 impl HistoryEntry {
     pub fn when(&self) -> String {
         DateTime::from_timestamp(self.timestamp, 0)
-            .map(|utc| utc.with_timezone(&Local).format("%Y-%m-%d %H:%M").to_string())
+            .map(|utc| {
+                utc.with_timezone(&Local)
+                    .format("%Y-%m-%d %H:%M")
+                    .to_string()
+            })
             .unwrap_or_else(|| "—".into())
     }
 }

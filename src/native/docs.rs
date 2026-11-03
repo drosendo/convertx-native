@@ -34,9 +34,7 @@ pub fn convert(request: &ConvertRequest, started: Instant) -> ConvertResult {
         "odt" | "ott" => archive_text(&bytes, "content.xml", parse_odt),
         "epub" => read_epub(&bytes),
         "rtf" | "rtfd" => Ok(parse_rtf(&String::from_utf8_lossy(&bytes))),
-        "html" | "htm" | "xhtml" | "webarchive" => {
-            Ok(parse_html(&String::from_utf8_lossy(&bytes)))
-        }
+        "html" | "htm" | "xhtml" | "webarchive" => Ok(parse_html(&String::from_utf8_lossy(&bytes))),
         _ => Ok(plain_blocks(&String::from_utf8_lossy(&bytes))),
     };
 
@@ -80,8 +78,8 @@ fn archive_text(
     entry: &str,
     parse: fn(&str) -> Vec<Block>,
 ) -> Result<Vec<Block>, String> {
-    let mut archive =
-        zip::ZipArchive::new(Cursor::new(bytes)).map_err(|err| format!("Not a valid archive: {err}"))?;
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
+        .map_err(|err| format!("Not a valid archive: {err}"))?;
     let mut file = archive
         .by_name(entry)
         .map_err(|_| format!("Missing '{entry}' inside the document"))?;
@@ -110,10 +108,10 @@ fn parse_docx(xml: &str) -> Vec<Block> {
                 kind = Kind::Paragraph;
             }
             "w:pStyle" => {
-                if let Some(value) = attr(&attrs, "w:val") {
-                    if let Some(level) = heading_level(value) {
-                        kind = Kind::Heading(level);
-                    }
+                if let Some(value) = attr(&attrs, "w:val")
+                    && let Some(level) = heading_level(value)
+                {
+                    kind = Kind::Heading(level);
                 }
             }
             "w:outlineLvl" => {
@@ -196,10 +194,8 @@ fn parse_odt(xml: &str) -> Vec<Block> {
                     current.push('\t');
                 }
             }
-            "text:line-break" => {
-                if inside {
-                    current.push('\n');
-                }
+            "text:line-break" if inside => {
+                current.push('\n');
             }
             _ => {}
         },
@@ -225,8 +221,8 @@ fn parse_odt(xml: &str) -> Vec<Block> {
 // ---------------------------------------------------------------------------
 
 fn read_epub(bytes: &[u8]) -> Result<Vec<Block>, String> {
-    let mut archive =
-        zip::ZipArchive::new(Cursor::new(bytes)).map_err(|err| format!("Not a valid EPUB: {err}"))?;
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
+        .map_err(|err| format!("Not a valid EPUB: {err}"))?;
 
     let mut chapters: Vec<String> = Vec::new();
     for index in 0..archive.len() {
@@ -413,9 +409,8 @@ fn plain_blocks(text: &str) -> Vec<Block> {
 fn render_text(blocks: &[Block]) -> String {
     let mut out = String::new();
     for block in blocks {
-        match block.kind {
-            Kind::Item => out.push_str("- "),
-            _ => {}
+        if block.kind == Kind::Item {
+            out.push_str("- ")
         }
         out.push_str(&block.text);
         out.push_str("\n\n");
@@ -470,7 +465,10 @@ fn render_html(blocks: &[Block]) -> String {
                 "<h{level}>{}</h{level}>\n",
                 escape_html(block.text.trim())
             )),
-            _ => out.push_str(&format!("<p>{}</p>\n", escape_html(&block.text).replace('\n', "<br>\n"))),
+            _ => out.push_str(&format!(
+                "<p>{}</p>\n",
+                escape_html(&block.text).replace('\n', "<br>\n")
+            )),
         }
     }
     if in_list {
@@ -580,9 +578,7 @@ fn walk<'a>(input: &'a str, mut sink: impl FnMut(Event<'a>)) {
         text_start = index;
 
         if let Some(name) = raw.strip_prefix('/') {
-            sink(Event::End {
-                name: name.trim(),
-            });
+            sink(Event::End { name: name.trim() });
             continue;
         }
 
@@ -720,7 +716,10 @@ fn decode_entities(text: &str) -> String {
             _ => entity
                 .strip_prefix('#')
                 .and_then(|number| {
-                    if let Some(hex) = number.strip_prefix('x').or_else(|| number.strip_prefix('X')) {
+                    if let Some(hex) = number
+                        .strip_prefix('x')
+                        .or_else(|| number.strip_prefix('X'))
+                    {
                         u32::from_str_radix(hex, 16).ok()
                     } else {
                         number.parse::<u32>().ok()

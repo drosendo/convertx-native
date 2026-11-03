@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to upload the assets to, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.artifact }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            artifact: macos-arm64
+          - os: macos-13
+            artifact: macos-x64
+          - os: ubuntu-22.04
+            artifact: linux-x64
+          - os: windows-2022
+            artifact: windows-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Linux windowing libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxi-dev libxrandr-dev libgl1-mesa-dev
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Version
+        id: version
+        shell: bash
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # ---------------------------------------------------------------- macOS
+      - name: Package macOS app bundle
+        if: runner.os == 'macOS'
+        run: |
+          ./tools/package_macos.sh
+          ditto -c -k --keepParent dist/ConvertX.app \
+            "dist/ConvertX-${{ steps.version.outputs.value }}-${{ matrix.artifact }}.zip"
+
+      # ---------------------------------------------------------------- Linux
+      - name: Package Linux
+        if: runner.os == 'Linux'
+        run: |
+          name="convertx-${{ steps.version.outputs.value }}-linux-x64"
+          mkdir -p "dist/$name"
+          cp target/release/convertx README.md LICENSE CREDITS.md "dist/$name/"
+          tar -czf "dist/$name.tar.gz" -C dist "$name"
+          rm -rf "dist/$name"
+
+      # -------------------------------------------------------------- Windows
+      - name: Package Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $name = "convertx-${{ steps.version.outputs.value }}-windows-x64"
+          New-Item -ItemType Directory -Force -Path "dist/$name" | Out-Null
+          Copy-Item target/release/convertx.exe, README.md, LICENSE, CREDITS.md "dist/$name"
+          Compress-Archive -Path "dist/$name/*" -DestinationPath "dist/$name.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Show assets
+        run: ls -lh dist
+
+      - name: Attach assets to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --repo "$REPO" --clobber
+          else
+            gh release create "$TAG" dist/* --repo "$REPO" \
+              --title "ConvertX ${TAG#v}" --generate-notes
+          fi

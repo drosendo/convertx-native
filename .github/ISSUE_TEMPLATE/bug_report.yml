@@ -1,0 +1,76 @@
+name: Bug report
+description: Something converted incorrectly, crashed, or refused to run
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. A reproducible report is the difference between
+        a fix in an hour and a fix in a month.
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Windows
+        - Linux
+        - Android
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release tag, or `cargo run -- --list` output if you built from source.
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how
+    attributes:
+      label: How are you using it?
+      options:
+        - The app window
+        - The command line (--to / --optimize)
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add a 12 MB HEIC photo
+        2. Pick JPEG
+        3. Click Convert
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log or error text
+      description: |
+        The app shows a Log section at the bottom, or the converter that failed. Paste anything red.
+        `convertx --list` output is useful when a converter is reported missing.
+      render: shell
+
+  - type: textarea
+    id: sample
+    attributes:
+      label: Sample file
+      description: |
+        If you can share the file that fails, please attach it (or a trimmed version). If not,
+        describe it: format, size, colour space, page count, first bytes of `file` output.

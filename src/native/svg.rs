@@ -29,10 +29,12 @@ pub fn convert(request: &ConvertRequest, started: Instant) -> ConvertResult {
         }
     };
 
-    let mut options = usvg::Options::default();
-    options.resources_dir = request.input.parent().map(|dir| dir.to_path_buf());
-    // Without a font database, <text> elements silently disappear.
-    options.fontdb = system_fonts();
+    let options = usvg::Options {
+        resources_dir: request.input.parent().map(|dir| dir.to_path_buf()),
+        // Without a font database, <text> elements silently disappear.
+        fontdb: system_fonts(),
+        ..Default::default()
+    };
 
     let tree = match usvg::Tree::from_data(&data, &options) {
         Ok(tree) => tree,
@@ -48,10 +50,7 @@ pub fn convert(request: &ConvertRequest, started: Instant) -> ConvertResult {
     let width = (tree.size().width() * scale).ceil().max(1.0) as u32;
     let height = (tree.size().height() * scale).ceil().max(1.0) as u32;
     if width == 0 || height == 0 || width > 30_000 || height > 30_000 {
-        return failure(
-            format!("Unsupported SVG size {width}x{height}"),
-            started,
-        );
+        return failure(format!("Unsupported SVG size {width}x{height}"), started);
     }
 
     let Some(mut pixmap) = tiny_skia::Pixmap::new(width, height) else {

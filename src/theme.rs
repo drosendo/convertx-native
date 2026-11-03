@@ -97,4 +97,3 @@ pub fn card() -> Frame {
         .corner_radius(CornerRadius::same(10))
         .inner_margin(Margin::same(12))
 }
-

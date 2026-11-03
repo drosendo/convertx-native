@@ -19,10 +19,7 @@ pub fn convert(request: &ConvertRequest, started: Instant) -> ConvertResult {
     };
 
     if bytes.is_empty() {
-        return failure(
-            format!("{} is empty", request.input.display()),
-            started,
-        );
+        return failure(format!("{} is empty", request.input.display()), started);
     }
 
     let Some(input_format) = ImageFormat::from_extension(&request.from) else {
@@ -32,23 +29,28 @@ pub fn convert(request: &ConvertRequest, started: Instant) -> ConvertResult {
         );
     };
 
-    let mut image = match image::ImageReader::with_format(Cursor::new(&bytes), input_format).decode()
-    {
-        Ok(image) => image,
-        Err(err) => {
-            return failure(
-                format!("Cannot decode {}: {err}", request.input.display()),
-                started,
-            );
-        }
-    };
+    let mut image =
+        match image::ImageReader::with_format(Cursor::new(&bytes), input_format).decode() {
+            Ok(image) => image,
+            Err(err) => {
+                return failure(
+                    format!("Cannot decode {}: {err}", request.input.display()),
+                    started,
+                );
+            }
+        };
 
     // The `image` crate ignores EXIF, so phone photos would come out sideways.
     if let Some(orientation) = exif_orientation(&bytes) {
         image = apply_orientation(image, orientation);
     }
 
-    match encode(&image, &request.to, request.options.jpeg_quality, &request.output) {
+    match encode(
+        &image,
+        &request.to,
+        request.options.jpeg_quality,
+        &request.output,
+    ) {
         Ok(note) => success(
             if note.is_empty() {
                 "Converted".to_string()
@@ -109,15 +111,13 @@ pub fn encode(
             Ok("Converted (lossless WebP)".into())
         }
         _ => {
-            if image.width() > 256 || image.height() > 256 {
-                if format == ImageFormat::Ico {
-                    // ICO tops out at 256×256; let another converter take over.
-                    return Err(format!(
-                        "ICO is limited to 256×256, this image is {}×{}",
-                        image.width(),
-                        image.height()
-                    ));
-                }
+            if (image.width() > 256 || image.height() > 256) && format == ImageFormat::Ico {
+                // ICO tops out at 256×256; let another converter take over.
+                return Err(format!(
+                    "ICO is limited to 256×256, this image is {}×{}",
+                    image.width(),
+                    image.height()
+                ));
             }
             write(image.save_with_format(output, format))?;
             Ok(String::new())
@@ -255,7 +255,9 @@ mod tests {
         bytes.extend_from_slice(b"Exif\0\0");
         bytes.extend_from_slice(b"MM\x00\x2a\x00\x00\x00\x08");
         bytes.extend_from_slice(&[0x00, 0x01]);
-        bytes.extend_from_slice(&[0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x06, 0x00, 0x00]);
+        bytes.extend_from_slice(&[
+            0x01, 0x12, 0x00, 0x03, 0x00, 0x00, 0x00, 0x01, 0x00, 0x06, 0x00, 0x00,
+        ]);
         bytes.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
         assert_eq!(exif_orientation(&bytes), Some(6));
         assert_eq!(exif_orientation(&[0x89, b'P', b'N', b'G']), None);

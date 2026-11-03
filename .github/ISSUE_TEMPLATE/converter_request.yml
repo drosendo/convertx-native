@@ -1,0 +1,41 @@
+name: Converter request
+description: A format or tool that ConvertX should support
+labels: ["enhancement", "converter"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two kinds of request fit here: a **tool** the app should orchestrate (a CLI that exists), or
+        a **format** that needs a built-in engine because no tool is available.
+
+  - type: input
+    id: formats
+    attributes:
+      label: Which formats
+      description: The input and the output, e.g. "DV → MP4" or "Pages → DOCX".
+      placeholder: from → to
+    validations:
+      required: true
+
+  - type: input
+    id: tool
+    attributes:
+      label: Tool that can do it
+      description: If you know a command-line tool, name it and link its site.
+      placeholder: dvdauthor / https://example.org
+
+  - type: textarea
+    id: why
+    attributes:
+      label: What are you trying to do?
+      description: The real task, not just the format pair — it often reveals a simpler route.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Would you like to implement it?
+      options:
+        - label: I can test the result on my files
+        - label: I would like to attempt the pull request (see CONTRIBUTING.md)

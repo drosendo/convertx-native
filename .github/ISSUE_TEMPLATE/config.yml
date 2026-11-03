@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Upstream ConvertX (the web app)
+    url: https://github.com/c4illin/ConvertX
+    about: For the self-hosted browser version, file the issue upstream.
+  - name: How converters are added
+    url: https://github.com/drosendo/convertx-native/blob/main/CONTRIBUTING.md#adding-an-external-converter
+    about: Step-by-step guide, with a working example.

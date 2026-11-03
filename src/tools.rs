@@ -61,7 +61,12 @@ fn bundle_candidates(name: &str) -> Vec<PathBuf> {
         for var in ["ProgramFiles", "ProgramFiles(x86)"] {
             if let Some(root) = std::env::var_os(var) {
                 for (dir, sub) in windows_dirs {
-                    found.push(PathBuf::from(&root).join(dir).join(sub).join(format!("{name}.exe")));
+                    found.push(
+                        PathBuf::from(&root)
+                            .join(dir)
+                            .join(sub)
+                            .join(format!("{name}.exe")),
+                    );
                 }
             }
         }
@@ -106,12 +111,11 @@ pub fn set_overrides(map: &std::collections::BTreeMap<String, String>) {
 }
 
 pub fn find_binary(name: &str) -> Option<PathBuf> {
-    if let Ok(guard) = overrides().read() {
-        if let Some(path) = guard.get(name) {
-            if is_executable(path) {
-                return Some(path.clone());
-            }
-        }
+    if let Ok(guard) = overrides().read()
+        && let Some(path) = guard.get(name)
+        && is_executable(path)
+    {
+        return Some(path.clone());
     }
     if let Ok(path) = which::which(name) {
         return Some(path);
@@ -222,9 +226,7 @@ impl Toolchain {
     }
 
     pub fn is_installed(&self, converter_id: &str) -> bool {
-        self.status
-            .get(converter_id)
-            .is_some_and(|s| s.available)
+        self.status.get(converter_id).is_some_and(|s| s.available)
     }
 
     pub fn status_of(&self, converter_id: &str) -> Option<&ToolStatus> {
@@ -428,9 +430,7 @@ pub fn install_argv(spec: &ConverterSpec, manager: PackageManager) -> Option<Vec
             argv.push("pip".into());
         }
         PackageManager::Pipx => {
-            if find_binary("pipx").is_none() {
-                return None;
-            }
+            find_binary("pipx")?;
             argv.push("pipx".into());
         }
         other => argv.push(other.program().to_string()),
@@ -441,10 +441,7 @@ pub fn install_argv(spec: &ConverterSpec, manager: PackageManager) -> Option<Vec
 }
 
 /// Same as [`install_argv`] but with elevation handled for system package managers.
-pub fn elevated(
-    argv: &[String],
-    manager: PackageManager,
-) -> (String, Vec<String>, Option<String>) {
+pub fn elevated(argv: &[String], manager: PackageManager) -> (String, Vec<String>, Option<String>) {
     if manager.needs_elevation() && !is_root() {
         if find_binary("pkexec").is_some() {
             let mut args = argv.to_vec();

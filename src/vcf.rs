@@ -85,8 +85,16 @@ fn parse_vcards(data: &str) -> Vec<Contact> {
                 push(&mut contact, "Full Name", &value);
             } else if key == "N" {
                 let parts: Vec<&str> = value.split(';').collect();
-                push(&mut contact, "Last Name", parts.first().copied().unwrap_or(""));
-                push(&mut contact, "First Name", parts.get(1).copied().unwrap_or(""));
+                push(
+                    &mut contact,
+                    "Last Name",
+                    parts.first().copied().unwrap_or(""),
+                );
+                push(
+                    &mut contact,
+                    "First Name",
+                    parts.get(1).copied().unwrap_or(""),
+                );
             } else if key.starts_with("TEL") && !has(&contact, "Phone") {
                 push(&mut contact, "Phone", &value);
             } else if key.starts_with("EMAIL") && !has(&contact, "Email") {

@@ -1,4 +1,4 @@
-use crate::registry::{normalize_output, Registry};
+use crate::registry::{Registry, normalize_output};
 use crate::tools::Toolchain;
 use crate::vcf;
 use std::path::{Path, PathBuf};
@@ -74,15 +74,15 @@ pub fn run(request: &ConvertRequest, tools: &Toolchain) -> ConvertResult {
         };
     };
 
-    if let Some(parent) = request.output.parent() {
-        if let Err(err) = std::fs::create_dir_all(parent) {
-            return ConvertResult {
-                ok: false,
-                message: format!("Cannot create output folder: {err}"),
-                duration: started.elapsed(),
-                ..Default::default()
-            };
-        }
+    if let Some(parent) = request.output.parent()
+        && let Err(err) = std::fs::create_dir_all(parent)
+    {
+        return ConvertResult {
+            ok: false,
+            message: format!("Cannot create output folder: {err}"),
+            duration: started.elapsed(),
+            ..Default::default()
+        };
     }
 
     if crate::native::handles(&spec.id) {
@@ -162,14 +162,12 @@ pub fn run(request: &ConvertRequest, tools: &Toolchain) -> ConvertResult {
             OutputMode::Stdout(path) => std::fs::write(path, &output.stdout)
                 .map(|_| path.clone())
                 .map_err(|err| err.to_string()),
-            OutputMode::OutDir { dir, extension } => {
-                locate_output(dir, extension).map(|file| {
-                    if file != request.output {
-                        let _ = std::fs::rename(&file, &request.output);
-                    }
-                    request.output.clone()
-                })
-            }
+            OutputMode::OutDir { dir, extension } => locate_output(dir, extension).map(|file| {
+                if file != request.output {
+                    let _ = std::fs::rename(&file, &request.output);
+                }
+                request.output.clone()
+            }),
         };
 
         match produced {
@@ -209,7 +207,11 @@ pub fn run(request: &ConvertRequest, tools: &Toolchain) -> ConvertResult {
             .find(|line| !line.trim().is_empty())
             .map(str::trim)
             .unwrap_or("the converter exited with an error");
-        result.message = format!("{} failed: {}", spec.name, crate::tools::truncate(detail, 160));
+        result.message = format!(
+            "{} failed: {}",
+            spec.name,
+            crate::tools::truncate(detail, 160)
+        );
     }
 
     cleanup(staging.as_deref());
@@ -307,7 +309,10 @@ pub fn run_chain(request: &ConvertRequest, tools: &Toolchain) -> ConvertResult {
 
     ConvertResult {
         ok: false,
-        message: format!("All converters failed — {}", crate::tools::truncate(&summary, 400)),
+        message: format!(
+            "All converters failed — {}",
+            crate::tools::truncate(&summary, 400)
+        ),
         duration: started.elapsed(),
         attempts,
         ..Default::default()
@@ -600,11 +605,10 @@ fn build_command(
             let dir = temp_dir();
             let (in_filter, out_filter) = libreoffice_filters(from, to);
             let mut cmd = tools.command("soffice");
-            cmd.arg("--headless")
-                .arg(format!(
-                    "-env:UserInstallation=file://{}/profile",
-                    dir.to_string_lossy()
-                ));
+            cmd.arg("--headless").arg(format!(
+                "-env:UserInstallation=file://{}/profile",
+                dir.to_string_lossy()
+            ));
             if let Some(filter) = in_filter {
                 cmd.arg(format!("--infilter={filter}"));
             }
@@ -666,7 +670,10 @@ fn build_command(
                     .arg("-background")
                     .arg("none");
                 if from == "svg" {
-                    cmd.arg("-background").arg("none").arg("-density").arg("512");
+                    cmd.arg("-background")
+                        .arg("none")
+                        .arg("-density")
+                        .arg("512");
                 }
             }
             if from == "pdf" {
@@ -687,26 +694,36 @@ fn build_command(
                 input.clone()
             });
             if from == "emf" {
-                cmd.arg("-background").arg("white").arg("-alpha").arg("remove");
+                cmd.arg("-background")
+                    .arg("white")
+                    .arg("-alpha")
+                    .arg("remove");
             }
             if to == "pdf" {
                 // Uncompressed image data makes absurdly large PDFs.
                 cmd.arg("-compress").arg("jpeg").arg("-quality").arg("92");
             }
             if to == "jpg" || to == "jpeg" {
-                cmd.arg("-quality").arg(options.jpeg_quality.clamp(1, 100).to_string());
+                cmd.arg("-quality")
+                    .arg(options.jpeg_quality.clamp(1, 100).to_string());
             }
             cmd.arg("-auto-orient").arg(&target);
             (cmd, OutputMode::Direct)
         }
         "graphicsmagick" => {
             let mut cmd = tools.command("gm");
-            cmd.arg("convert").arg(&input).arg("-auto-orient").arg(&target);
+            cmd.arg("convert")
+                .arg(&input)
+                .arg("-auto-orient")
+                .arg(&target);
             (cmd, OutputMode::Direct)
         }
         "assimp" => {
             let mut cmd = tools.command("assimp");
-            cmd.arg("export").arg(&input).arg(&target).arg(format!("-f{to}"));
+            cmd.arg("export")
+                .arg(&input)
+                .arg(&target)
+                .arg(format!("-f{to}"));
             (cmd, OutputMode::Direct)
         }
         "ffmpeg" => {
@@ -776,7 +793,11 @@ fn build_command(
         }
         "pdftotext" => {
             let mut cmd = tools.command("pdftotext");
-            cmd.arg("-layout").arg("-enc").arg("UTF-8").arg(&input).arg(&target);
+            cmd.arg("-layout")
+                .arg("-enc")
+                .arg("UTF-8")
+                .arg(&input)
+                .arg(&target);
             (cmd, OutputMode::Direct)
         }
         "pdftoppm" => {
@@ -980,7 +1001,7 @@ mod tests {
         assert!(!result.ok);
         // Either several converters were tried, or none is installed at all.
         assert!(
-            result.attempts.len() >= 1 || result.message.contains("not installed"),
+            !result.attempts.is_empty() || result.message.contains("not installed"),
             "{}",
             result.message
         );
@@ -1014,10 +1035,40 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// A command that keeps running so the watchdog has something to kill.
+    fn hanging_command() -> Command {
+        #[cfg(unix)]
+        {
+            let mut command = Command::new("sleep");
+            command.arg("30");
+            command
+        }
+        #[cfg(windows)]
+        {
+            let mut command = Command::new("cmd");
+            command.args(["/C", "ping", "-n", "30", "127.0.0.1"]);
+            command
+        }
+    }
+
+    fn echoing_command() -> Command {
+        #[cfg(unix)]
+        {
+            let mut command = Command::new("echo");
+            command.arg("done");
+            command
+        }
+        #[cfg(windows)]
+        {
+            let mut command = Command::new("cmd");
+            command.args(["/C", "echo done"]);
+            command
+        }
+    }
+
     #[test]
     fn watchdog_kills_a_hung_converter() {
-        let mut command = Command::new("sleep");
-        command.arg("30");
+        let command = hanging_command();
         let started = Instant::now();
         let result = run_child(command, 1).expect("spawn");
         assert!(result.timed_out, "the watchdog should have fired");
@@ -1026,8 +1077,7 @@ mod tests {
 
     #[test]
     fn watchdog_lets_fast_converters_finish() {
-        let mut command = Command::new("echo");
-        command.arg("done");
+        let command = echoing_command();
         let result = run_child(command, 30).expect("spawn");
         assert!(!result.timed_out);
         assert!(result.status.success());
@@ -1051,7 +1101,10 @@ mod tests {
         assert!(validate_output(&request).is_err(), "empty file must fail");
 
         std::fs::write(&request.output, b"definitely not a png").unwrap();
-        assert!(validate_output(&request).is_err(), "corrupt image must fail");
+        assert!(
+            validate_output(&request).is_err(),
+            "corrupt image must fail"
+        );
 
         write_png(&request.output);
         assert!(validate_output(&request).is_ok());

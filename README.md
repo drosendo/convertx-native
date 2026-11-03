@@ -10,6 +10,18 @@ converters you already have installed — and falling back to built-in Rust engi
 
 No server, no browser tab, no account.
 
+## Download
+
+Prebuilt releases are on the [releases page](https://github.com/drosendo/convertx-native/releases):
+
+| Platform | File | Notes |
+| --- | --- | --- |
+| macOS 11+ (Apple silicon) | `ConvertX-*-macos-arm64.zip` | unzip, drag into `/Applications` |
+| macOS 11+ (Intel) | `ConvertX-*-macos-x64.zip` | same |
+| Windows 10+ | `convertx-*-windows-x64.zip` | unzip, run `convertx.exe` |
+| Linux (glibc) | `convertx-*-linux-x64.tar.gz` | `tar xzf`, run `./convertx` |
+| Android | built from source — see [Android](#android) | built-in engines only |
+
 ## What makes it reliable
 
 | Problem | How ConvertX handles it |
@@ -167,6 +179,39 @@ src/cli.rs        headless mode
 assets/           formats.json (ported from upstream) + native.json (built-in engines)
 tools/            gen_formats.py — regenerates formats.json from an upstream checkout
 ```
+
+## Android
+
+The Android build compiles the same Rust core and the same egui interface, but **only the built-in
+engines work**: Android forbids spawning the external tools, so ImageMagick, FFmpeg, LibreOffice and
+friends are unavailable. Images, SVG, spreadsheets, documents, VCF and the whole image optimizer
+run in-process and need no installs.
+
+```bash
+rustup target add aarch64-linux-android
+cargo install cargo-ndk
+export ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/27.2.12479018"
+./tools/package_android.sh          # builds dist/ConvertX.apk
+adb install -r dist/ConvertX.apk
+```
+
+The resulting APK is debug-signed, so it installs directly; publishing to Play would need a
+release keystore.
+
+## Contributing
+
+Everyone is welcome — bug reports, converter requests, docs and code.
+[`good first issue`](https://github.com/drosendo/convertx-native/labels/good%20first%20issue)
+labels the small ones.
+
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — setup, the checks CI runs, and step-by-step guides for
+  adding a converter or a built-in engine
+- [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)
+- [CREDITS.md](./CREDITS.md) — who built what this project stands on
+
+Adding a converter usually needs no Rust at all if the tool takes a simple `in → out` command:
+[`assets/native.json`](./assets/native.json) declares it, and one match arm in
+[`src/convert.rs`](./src/convert.rs) wires the argv.
 
 ## Credits and licence
 

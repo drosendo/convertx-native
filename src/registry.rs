@@ -31,27 +31,6 @@ pub struct ConverterSpec {
     pub platforms: Vec<String>,
 }
 
-impl ConverterSpec {
-    pub fn inputs(&self) -> BTreeSet<&str> {
-        self.from.values().flatten().map(String::as_str).collect()
-    }
-
-    pub fn outputs(&self) -> BTreeSet<&str> {
-        self.to.values().flatten().map(String::as_str).collect()
-    }
-
-    /// A route exists when both ends live in the same category, matching upstream behaviour.
-    pub fn supports(&self, from: &str, to: &str) -> bool {
-        self.from.iter().any(|(category, inputs)| {
-            inputs.iter().any(|i| i == from)
-                && self
-                    .to
-                    .get(category)
-                    .is_some_and(|outputs| outputs.iter().any(|o| o == to))
-        })
-    }
-}
-
 #[derive(Deserialize)]
 struct RegistryFile {
     converters: Vec<ConverterSpec>,
@@ -94,10 +73,7 @@ fn canonicalise(mut spec: ConverterSpec) -> ConverterSpec {
                     seen.push(canonical);
                 }
             }
-            result
-                .entry(category.clone())
-                .or_default()
-                .extend(seen);
+            result.entry(category.clone()).or_default().extend(seen);
         }
         *map = result;
     };
@@ -355,7 +331,12 @@ mod tests {
     fn categories_must_match() {
         let registry = Registry::get();
         // vcf is only routed through the contacts category.
-        assert!(!registry.converters_for("vcf", "png").iter().any(|c| c.id == "vcf"));
+        assert!(
+            !registry
+                .converters_for("vcf", "png")
+                .iter()
+                .any(|c| c.id == "vcf")
+        );
         assert_eq!(registry.converters_for("vcf", "csv").len(), 1);
     }
 
@@ -363,7 +344,10 @@ mod tests {
     fn aliases_fold_into_one_format() {
         let registry = Registry::get();
         let targets = registry.targets_for("svg");
-        assert!(targets.contains(&"jpeg"), "jpeg must be a target: {targets:?}");
+        assert!(
+            targets.contains(&"jpeg"),
+            "jpeg must be a target: {targets:?}"
+        );
         assert!(!targets.contains(&"jpg"), "jpg must fold into jpeg");
         assert_eq!(canonical_format("JPG"), "jpeg");
         assert_eq!(canonical_format("tif"), "tiff");
@@ -388,11 +372,15 @@ mod tests {
     fn compound_extensions_are_detected() {
         let registry = Registry::get();
         assert_eq!(
-            registry.detect_extension(Path::new("/tmp/brain.nii.gz")).as_deref(),
+            registry
+                .detect_extension(Path::new("/tmp/brain.nii.gz"))
+                .as_deref(),
             Some("nii.gz")
         );
         assert_eq!(
-            registry.detect_extension(Path::new("/tmp/photo.PNG")).as_deref(),
+            registry
+                .detect_extension(Path::new("/tmp/photo.PNG"))
+                .as_deref(),
             Some("png")
         );
     }

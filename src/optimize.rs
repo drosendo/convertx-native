@@ -72,8 +72,21 @@ impl OptimizeOutcome {
 pub fn is_optimizable(extension: &str) -> bool {
     matches!(
         extension.to_lowercase().as_str(),
-        "png" | "jpeg" | "jpg" | "jpe" | "jfif" | "gif" | "webp" | "svg" | "tif" | "tiff" | "bmp"
-            | "ico" | "avif" | "heic" | "heif"
+        "png"
+            | "jpeg"
+            | "jpg"
+            | "jpe"
+            | "jfif"
+            | "gif"
+            | "webp"
+            | "svg"
+            | "tif"
+            | "tiff"
+            | "bmp"
+            | "ico"
+            | "avif"
+            | "heic"
+            | "heif"
     )
 }
 
@@ -207,14 +220,14 @@ fn optimize_jpeg(
                 .arg(&temp)
                 .output();
             let _ = std::fs::remove_file(&temp);
-            if let Ok(output_result) = status {
-                if output_result.status.success() {
-                    notes.push("optimized Huffman tables (jpegtran, lossless)".into());
-                    if options.strip_metadata {
-                        notes.push("removed EXIF, IPTC, XMP and comments; kept the ICC profile".into());
-                    }
-                    return Ok(());
+            if let Ok(output_result) = status
+                && output_result.status.success()
+            {
+                notes.push("optimized Huffman tables (jpegtran, lossless)".into());
+                if options.strip_metadata {
+                    notes.push("removed EXIF, IPTC, XMP and comments; kept the ICC profile".into());
                 }
+                return Ok(());
             }
         }
     }
@@ -295,16 +308,20 @@ fn optimize_webp(
                 .args(["-quiet", "-q"])
                 .arg(options.quality.to_string())
                 .arg("-metadata")
-                .arg(if options.strip_metadata { "none" } else { "all" })
+                .arg(if options.strip_metadata {
+                    "none"
+                } else {
+                    "all"
+                })
                 .arg(input)
                 .arg("-o")
                 .arg(output)
                 .output();
-            if let Ok(result) = status {
-                if result.status.success() {
-                    notes.push(format!("re-encoded at quality {} (cwebp)", options.quality));
-                    return Ok(());
-                }
+            if let Ok(result) = status
+                && result.status.success()
+            {
+                notes.push(format!("re-encoded at quality {} (cwebp)", options.quality));
+                return Ok(());
             }
         }
         return reencode_with_image(input, output, options, notes);
@@ -367,11 +384,11 @@ fn optimize_gif(
             );
         }
         let result = command.arg(input).arg("-o").arg(output).output();
-        if let Ok(result) = result {
-            if result.status.success() {
-                notes.push("optimized frame deltas (gifsicle)".into());
-                return Ok(());
-            }
+        if let Ok(result) = result
+            && result.status.success()
+        {
+            notes.push("optimized frame deltas (gifsicle)".into());
+            return Ok(());
         }
     }
 
@@ -467,28 +484,35 @@ fn optimize_svg(
         let mut command = std::process::Command::new(binary);
         match tool {
             "svgo" => {
-                command.args(["--input"]).arg(input).args(["--output"]).arg(output);
+                command
+                    .args(["--input"])
+                    .arg(input)
+                    .args(["--output"])
+                    .arg(output);
             }
             "svgcleaner" => {
                 command.arg(input).arg(output);
             }
             _ => {
-                command
-                    .arg("-i")
-                    .arg(input)
-                    .arg("-o")
-                    .arg(output)
-                    .args(["--remove-metadata", "--enable-comment-stripping", "--shorten-ids"]);
+                command.arg("-i").arg(input).arg("-o").arg(output).args([
+                    "--remove-metadata",
+                    "--enable-comment-stripping",
+                    "--shorten-ids",
+                ]);
             }
         }
-        if command.output().map(|r| r.status.success()).unwrap_or(false) {
+        if command
+            .output()
+            .map(|r| r.status.success())
+            .unwrap_or(false)
+        {
             notes.push(format!("cleaned with {tool}"));
             return Ok(());
         }
     }
 
-    let text = std::fs::read_to_string(input)
-        .map_err(|err| format!("Cannot read the SVG: {err}"))?;
+    let text =
+        std::fs::read_to_string(input).map_err(|err| format!("Cannot read the SVG: {err}"))?;
     let mut result = text;
     if options.strip_metadata {
         result = strip_svg_noise(&result);
@@ -499,7 +523,10 @@ fn optimize_svg(
 }
 
 fn strip_svg_noise(svg: &str) -> String {
-    let mut out = remove_element_blocks(&remove_element_blocks(svg, "metadata"), "sodipodi:namedview");
+    let mut out = remove_element_blocks(
+        &remove_element_blocks(svg, "metadata"),
+        "sodipodi:namedview",
+    );
 
     // Drop comments, keeping conditional-comment free documents intact.
     while let Some(start) = out.find("<!--") {
@@ -510,8 +537,14 @@ fn strip_svg_noise(svg: &str) -> String {
     }
     out = remove_attribute_prefix(&out, "inkscape:");
     out = remove_attribute_prefix(&out, "sodipodi:");
-    out = out.replace(" xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\"", "");
-    out = out.replace(" xmlns:sodipodi=\"http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd\"", "");
+    out = out.replace(
+        " xmlns:inkscape=\"http://www.inkscape.org/namespaces/inkscape\"",
+        "",
+    );
+    out = out.replace(
+        " xmlns:sodipodi=\"http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd\"",
+        "",
+    );
     out = out.replace(" xmlns:serif=\"http://www.serif.com/\"", "");
 
     // Collapse whitespace between tags and runs of blank space.
@@ -634,10 +667,10 @@ fn reencode_with_image(
         .map_err(|err| format!("Cannot decode the image: {err}"))?;
 
     let mut image = image;
-    if let Some(max) = options.max_dimension {
-        if image.width().max(image.height()) > max {
-            image = image.resize(max, max, image::imageops::FilterType::Lanczos3);
-        }
+    if let Some(max) = options.max_dimension
+        && image.width().max(image.height()) > max
+    {
+        image = image.resize(max, max, image::imageops::FilterType::Lanczos3);
     }
 
     let target = output
@@ -659,11 +692,7 @@ fn temp_path(output: &Path, extension: &str) -> std::path::PathBuf {
 }
 
 /// Optimizes in place through a temporary file, so a crash never loses the original.
-pub fn optimize_in_place(
-    input: &Path,
-    options: &OptimizeOptions,
-    backup: bool,
-) -> OptimizeOutcome {
+pub fn optimize_in_place(input: &Path, options: &OptimizeOptions, backup: bool) -> OptimizeOutcome {
     let extension = input
         .extension()
         .map(|e| e.to_string_lossy().into_owned())
@@ -703,7 +732,9 @@ mod tests {
             image::Rgba([(x % 256) as u8, (y % 256) as u8, 90, 255])
         });
         let mut buffer = Cursor::new(Vec::new());
-        image.write_to(&mut buffer, image::ImageFormat::Png).unwrap();
+        image
+            .write_to(&mut buffer, image::ImageFormat::Png)
+            .unwrap();
         let mut png = buffer.into_inner();
 
         // Append a tEXt chunk right after IHDR so the file carries metadata.

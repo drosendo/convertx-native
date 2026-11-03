@@ -1,20 +1,20 @@
 use crate::convert::{self, ConvertRequest, ConvertResult};
 use crate::history::{self, HistoryEntry};
 use crate::optimize::{self, OptimizeOptions, OptimizeOutcome};
-use crate::registry::{
-    human_size, normalize_input, normalize_output, ConverterSpec, Registry,
-};
+use crate::registry::{ConverterSpec, Registry, human_size, normalize_input, normalize_output};
 use crate::settings::Settings;
 use crate::theme;
 use crate::tools::{self, PackageManager, Toolchain};
 use eframe::egui;
-use egui::{Align, Align2, Color32, CornerRadius, FontId, Layout, RichText, Sense, Stroke, StrokeKind};
+use egui::{
+    Align, Align2, Color32, CornerRadius, FontId, Layout, RichText, Sense, Stroke, StrokeKind,
+};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,6 +113,17 @@ struct Toast {
     text: String,
     color: Color32,
     at: Instant,
+}
+
+struct ConverterRow {
+    id: String,
+    name: String,
+    description: String,
+    installed: bool,
+    version: Option<String>,
+    missing: Vec<String>,
+    builtin: bool,
+    binaries: Vec<String>,
 }
 
 struct Badge {
@@ -420,7 +431,11 @@ impl ConvertXApp {
                 .name
                 .trim_end_matches(&format!(".{}", job.raw_ext.clone().unwrap_or_default()))
                 .to_string();
-            let stem = if stem.is_empty() { job.name.clone() } else { stem };
+            let stem = if stem.is_empty() {
+                job.name.clone()
+            } else {
+                stem
+            };
             let output = convert::unique_output_path(&out_dir, &stem, &extension, &taken);
             taken.push(output.clone());
 
@@ -481,27 +496,29 @@ impl ConvertXApp {
             let chain = Arc::clone(&chain);
             let tx = self.events_tx.clone();
             let ctx = ctx.clone();
-            std::thread::spawn(move || loop {
-                let index = cursor.fetch_add(1, Ordering::SeqCst);
-                let Some(request) = queue.get(index).cloned() else {
-                    break;
-                };
-                let _ = tx.send(Event::JobStarted(request.job_id));
-                ctx.request_repaint();
+            std::thread::spawn(move || {
+                loop {
+                    let index = cursor.fetch_add(1, Ordering::SeqCst);
+                    let Some(request) = queue.get(index).cloned() else {
+                        break;
+                    };
+                    let _ = tx.send(Event::JobStarted(request.job_id));
+                    ctx.request_repaint();
 
-                let result = convert::run_chain(&request, &chain);
-                let converter = result
-                    .converter
-                    .clone()
-                    .unwrap_or_else(|| request.converter_id.clone());
-                let _ = tx.send(Event::JobFinished {
-                    id: request.job_id,
-                    converter,
-                    from: request.from.clone(),
-                    to: request.to.clone(),
-                    result,
-                });
-                ctx.request_repaint();
+                    let result = convert::run_chain(&request, &chain);
+                    let converter = result
+                        .converter
+                        .clone()
+                        .unwrap_or_else(|| request.converter_id.clone());
+                    let _ = tx.send(Event::JobFinished {
+                        id: request.job_id,
+                        converter,
+                        from: request.from.clone(),
+                        to: request.to.clone(),
+                        result,
+                    });
+                    ctx.request_repaint();
+                }
             });
         }
 
@@ -529,10 +546,10 @@ impl ConvertXApp {
                 theme::WARN,
             );
         }
-        if self.settings.open_output_after {
-            if let Some(dir) = self.last_output_dir.clone() {
-                crate::open_in_file_manager(&dir);
-            }
+        if self.settings.open_output_after
+            && let Some(dir) = self.last_output_dir.clone()
+        {
+            crate::open_in_file_manager(&dir);
         }
         self.batch_total = 0;
         self.batch_done = 0;
@@ -543,11 +560,7 @@ impl ConvertXApp {
         self.jobs
             .iter()
             .filter(|job| job.status != JobStatus::Running)
-            .filter(|job| {
-                job.raw_ext
-                    .as_deref()
-                    .is_some_and(optimize::is_optimizable)
-            })
+            .filter(|job| job.raw_ext.as_deref().is_some_and(optimize::is_optimizable))
             .count()
     }
 
@@ -557,11 +570,11 @@ impl ConvertXApp {
         }
 
         let out_dir = self.settings.output_path();
-        if !self.optimize_in_place {
-            if let Err(err) = std::fs::create_dir_all(&out_dir) {
-                self.toast(format!("Cannot create output folder: {err}"), theme::ERROR);
-                return;
-            }
+        if !self.optimize_in_place
+            && let Err(err) = std::fs::create_dir_all(&out_dir)
+        {
+            self.toast(format!("Cannot create output folder: {err}"), theme::ERROR);
+            return;
         }
 
         let options = self.optimize.clone();
@@ -613,7 +626,8 @@ impl ConvertXApp {
                 if skipped == 0 {
                     "Add images to optimize".to_string()
                 } else {
-                    "Only PNG, JPEG, GIF, WebP, SVG, TIFF, AVIF and HEIC can be optimized".to_string()
+                    "Only PNG, JPEG, GIF, WebP, SVG, TIFF, AVIF and HEIC can be optimized"
+                        .to_string()
                 },
                 theme::WARN,
             );
@@ -649,25 +663,27 @@ impl ConvertXApp {
             let options = options.clone();
             let tx = self.events_tx.clone();
             let ctx = ctx.clone();
-            std::thread::spawn(move || loop {
-                let index = cursor.fetch_add(1, Ordering::SeqCst);
-                let Some((id, input, output)) = queue.get(index).cloned() else {
-                    break;
-                };
-                let _ = tx.send(Event::JobStarted(id));
-                ctx.request_repaint();
+            std::thread::spawn(move || {
+                loop {
+                    let index = cursor.fetch_add(1, Ordering::SeqCst);
+                    let Some((id, input, output)) = queue.get(index).cloned() else {
+                        break;
+                    };
+                    let _ = tx.send(Event::JobStarted(id));
+                    ctx.request_repaint();
 
-                let mut outcome = if in_place {
-                    optimize::optimize_in_place(&input, &options, backup)
-                } else {
-                    optimize::optimize(&input, &output, &options)
-                };
-                if outcome.ok && !in_place {
-                    outcome.message = "Optimized".into();
+                    let mut outcome = if in_place {
+                        optimize::optimize_in_place(&input, &options, backup)
+                    } else {
+                        optimize::optimize(&input, &output, &options)
+                    };
+                    if outcome.ok && !in_place {
+                        outcome.message = "Optimized".into();
+                    }
+
+                    let _ = tx.send(Event::JobOptimized { id, outcome });
+                    ctx.request_repaint();
                 }
-
-                let _ = tx.send(Event::JobOptimized { id, outcome });
-                ctx.request_repaint();
             });
         }
     }
@@ -819,16 +835,17 @@ impl ConvertXApp {
                     let mut output_for_history = None;
                     let mut log_line = None;
                     if let Some(job) = self.jobs.iter_mut().find(|j| j.id == id) {
-                        job.status = if result.ok { JobStatus::Done } else { JobStatus::Failed };
+                        job.status = if result.ok {
+                            JobStatus::Done
+                        } else {
+                            JobStatus::Failed
+                        };
                         job.message = result.message.clone();
                         job.output = result.output.clone();
                         job.duration = Some(result.duration);
                         job.log = result.log.clone();
-                        output_for_history = Some((
-                            job.name.clone(),
-                            job.path.clone(),
-                            job.output.clone(),
-                        ));
+                        output_for_history =
+                            Some((job.name.clone(), job.path.clone(), job.output.clone()));
                         log_line = Some(format!(
                             "{}: {} → {} ({})",
                             job.name, from, to, result.message
@@ -839,25 +856,25 @@ impl ConvertXApp {
                         self.push_log(line);
                     }
 
-                    if self.settings.record_history {
-                        if let Some((name, input, output)) = output_for_history {
-                            history::push(
-                                &mut self.history,
-                                HistoryEntry {
-                                    timestamp: chrono::Local::now().timestamp(),
-                                    input: input.to_string_lossy().into_owned(),
-                                    output: output
-                                        .map(|p| p.to_string_lossy().into_owned())
-                                        .unwrap_or_else(|| name.clone()),
-                                    converter,
-                                    from,
-                                    to,
-                                    ok: result.ok,
-                                    message: result.message.clone(),
-                                    duration_ms: result.duration.as_millis() as u64,
-                                },
-                            );
-                        }
+                    if self.settings.record_history
+                        && let Some((name, input, output)) = output_for_history
+                    {
+                        history::push(
+                            &mut self.history,
+                            HistoryEntry {
+                                timestamp: chrono::Local::now().timestamp(),
+                                input: input.to_string_lossy().into_owned(),
+                                output: output
+                                    .map(|p| p.to_string_lossy().into_owned())
+                                    .unwrap_or_else(|| name.clone()),
+                                converter,
+                                from,
+                                to,
+                                ok: result.ok,
+                                message: result.message.clone(),
+                                duration_ms: result.duration.as_millis() as u64,
+                            },
+                        );
                     }
 
                     self.batch_done += 1;
@@ -938,8 +955,13 @@ impl ConvertXApp {
     fn ui_header(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             let (rect, _) = ui.allocate_exact_size(egui::vec2(34.0, 34.0), Sense::hover());
-            ui.painter()
-                .rect(rect, CornerRadius::same(9), theme::ACCENT, Stroke::NONE, StrokeKind::Inside);
+            ui.painter().rect(
+                rect,
+                CornerRadius::same(9),
+                theme::ACCENT,
+                Stroke::NONE,
+                StrokeKind::Inside,
+            );
             ui.painter().text(
                 rect.center(),
                 Align2::CENTER_CENTER,
@@ -962,13 +984,14 @@ impl ConvertXApp {
             ui.add_space(16.0);
             for mode in [Mode::Convert, Mode::Optimize] {
                 let selected = self.mode == mode;
-                let button = egui::Button::new(
-                    RichText::new(mode.label())
-                        .size(12.5)
-                        .color(if selected { Color32::WHITE } else { theme::MUTED }),
-                )
-                .fill(if selected { theme::ACCENT } else { theme::CARD })
-                .stroke(Stroke::new(1.0, theme::BORDER));
+                let button =
+                    egui::Button::new(RichText::new(mode.label()).size(12.5).color(if selected {
+                        Color32::WHITE
+                    } else {
+                        theme::MUTED
+                    }))
+                    .fill(if selected { theme::ACCENT } else { theme::CARD })
+                    .stroke(Stroke::new(1.0, theme::BORDER));
                 if ui
                     .add(button)
                     .on_hover_text(match mode {
@@ -1005,9 +1028,11 @@ impl ConvertXApp {
                 };
                 let response = ui
                     .add(
-                        egui::Button::new(RichText::new(format!("● {label}")).size(12.0).color(color))
-                            .fill(theme::CARD)
-                            .stroke(Stroke::new(1.0, theme::BORDER)),
+                        egui::Button::new(
+                            RichText::new(format!("● {label}")).size(12.0).color(color),
+                        )
+                        .fill(theme::CARD)
+                        .stroke(Stroke::new(1.0, theme::BORDER)),
                     )
                     .on_hover_text("Open the converter manager");
                 if response.clicked() {
@@ -1018,7 +1043,11 @@ impl ConvertXApp {
     }
 
     fn ui_empty_state(&mut self, ui: &mut egui::Ui) {
-        let border = if self.drag_hover { theme::ACCENT } else { theme::BORDER };
+        let border = if self.drag_hover {
+            theme::ACCENT
+        } else {
+            theme::BORDER
+        };
         let fill = if self.drag_hover {
             theme::ACCENT_SOFT
         } else {
@@ -1257,10 +1286,10 @@ impl ConvertXApp {
 
                     match view.status {
                         JobStatus::Done => {
-                            if let Some(output) = &view.output {
-                                if ui.small_button("Reveal").clicked() {
-                                    reveal = Some(output.clone());
-                                }
+                            if let Some(output) = &view.output
+                                && ui.small_button("Reveal").clicked()
+                            {
+                                reveal = Some(output.clone());
                             }
                         }
                         JobStatus::Failed | JobStatus::Ready if self.mode == Mode::Optimize => {}
@@ -1278,8 +1307,7 @@ impl ConvertXApp {
                                         let mut targets = registry.targets_for(from);
                                         targets.sort_unstable();
                                         for target in targets {
-                                            let selected =
-                                                view.target.as_deref() == Some(target);
+                                            let selected = view.target.as_deref() == Some(target);
                                             if ui
                                                 .selectable_label(
                                                     selected,
@@ -1299,9 +1327,9 @@ impl ConvertXApp {
                     }
 
                     let installed_any = view
-                        .target
+                        .from
                         .as_deref()
-                        .and_then(|to| view.from.as_deref().map(|from| (from, to)))
+                        .zip(view.target.as_deref())
                         .map(|(from, to)| {
                             registry
                                 .converters_for(from, to)
@@ -1309,31 +1337,24 @@ impl ConvertXApp {
                                 .any(|c| tools.is_installed(&c.id))
                         })
                         .unwrap_or(false);
-                    if self.mode == Mode::Optimize {
-                        if let Some(new_size) = view.new_size {
-                            let saved = view.size.saturating_sub(new_size);
-                            if saved > 0 {
-                                let percent = (saved as f64 * 100.0 / view.size.max(1) as f64)
-                                    .round() as i64;
-                                ui.label(
-                                    RichText::new(format!("−{percent}%"))
-                                        .size(10.5)
-                                        .strong()
-                                        .color(theme::SUCCESS),
-                                );
-                            }
+                    if self.mode == Mode::Optimize
+                        && let Some(new_size) = view.new_size
+                    {
+                        let saved = view.size.saturating_sub(new_size);
+                        if saved > 0 {
+                            let percent =
+                                (saved as f64 * 100.0 / view.size.max(1) as f64).round() as i64;
+                            ui.label(
+                                RichText::new(format!("−{percent}%"))
+                                    .size(10.5)
+                                    .strong()
+                                    .color(theme::SUCCESS),
+                            );
                         }
                     }
 
-                    if view.status == JobStatus::Ready
-                        && view.target.is_some()
-                        && !installed_any
-                    {
-                        ui.label(
-                            RichText::new("needs tool")
-                                .size(10.0)
-                                .color(theme::WARN),
-                        );
+                    if view.status == JobStatus::Ready && view.target.is_some() && !installed_any {
+                        ui.label(RichText::new("needs tool").size(10.0).color(theme::WARN));
                     }
 
                     ui.label(
@@ -1402,12 +1423,8 @@ impl ConvertXApp {
         }
 
         let order = self.category_order();
-        grouped.sort_by_key(|(name, _)| {
-            order
-                .iter()
-                .position(|c| c == name)
-                .unwrap_or(order.len())
-        });
+        grouped
+            .sort_by_key(|(name, _)| order.iter().position(|c| c == name).unwrap_or(order.len()));
 
         if grouped.is_empty() {
             ui.add_space(16.0);
@@ -1459,13 +1476,8 @@ impl ConvertXApp {
                             names
                         };
                         let selected = self.global_target.eq_ignore_ascii_case(&target);
-                        let response = format_row(
-                            ui,
-                            &target.to_uppercase(),
-                            &meta,
-                            selected,
-                            installed,
-                        );
+                        let response =
+                            format_row(ui, &target.to_uppercase(), &meta, selected, installed);
                         if response.clicked() {
                             if installed {
                                 chosen = Some(target.clone());
@@ -1501,9 +1513,21 @@ impl ConvertXApp {
         ui.add_space(4.0);
         ui.horizontal(|ui| {
             let presets: [(bool, &str, &str); 3] = [
-                (true, "Lossless", "Pixel-identical. Metadata removed, compression improved."),
-                (false, "Balanced", "Re-encodes at quality 82 — visually identical for most photos."),
-                (false, "Smallest", "Quality 70. Noticeable only on close inspection."),
+                (
+                    true,
+                    "Lossless",
+                    "Pixel-identical. Metadata removed, compression improved.",
+                ),
+                (
+                    false,
+                    "Balanced",
+                    "Re-encodes at quality 82 — visually identical for most photos.",
+                ),
+                (
+                    false,
+                    "Smallest",
+                    "Quality 70. Noticeable only on close inspection.",
+                ),
             ];
             for (lossless, label, hint) in presets {
                 let selected = self.optimize.lossless == lossless
@@ -1512,13 +1536,14 @@ impl ConvertXApp {
                         "Balanced" => !lossless && self.optimize.quality >= 80,
                         _ => !lossless && self.optimize.quality < 80,
                     };
-                let button = egui::Button::new(
-                    RichText::new(label)
-                        .size(12.0)
-                        .color(if selected { Color32::WHITE } else { theme::MUTED }),
-                )
-                .fill(if selected { theme::ACCENT } else { theme::CARD })
-                .stroke(Stroke::new(1.0, theme::BORDER));
+                let button =
+                    egui::Button::new(RichText::new(label).size(12.0).color(if selected {
+                        Color32::WHITE
+                    } else {
+                        theme::MUTED
+                    }))
+                    .fill(if selected { theme::ACCENT } else { theme::CARD })
+                    .stroke(Stroke::new(1.0, theme::BORDER));
                 if ui.add(button).on_hover_text(hint).clicked() {
                     self.optimize.lossless = lossless;
                     self.optimize.quality = match label {
@@ -1533,7 +1558,11 @@ impl ConvertXApp {
         ui.add_space(10.0);
         ui.add_enabled_ui(!self.optimize.lossless, |ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new("JPEG/WebP quality").size(11.5).color(theme::MUTED));
+                ui.label(
+                    RichText::new("JPEG/WebP quality")
+                        .size(11.5)
+                        .color(theme::MUTED),
+                );
                 ui.add(egui::Slider::new(&mut self.optimize.quality, 40..=95));
             });
         });
@@ -1541,7 +1570,10 @@ impl ConvertXApp {
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             let mut resize = self.optimize.max_dimension.is_some();
-            if ui.checkbox(&mut resize, "Shrink the long edge to").changed() {
+            if ui
+                .checkbox(&mut resize, "Shrink the long edge to")
+                .changed()
+            {
                 self.optimize.max_dimension = if resize { Some(2048) } else { None };
             }
             if let Some(max) = self.optimize.max_dimension.as_mut() {
@@ -1550,9 +1582,11 @@ impl ConvertXApp {
         });
         if !self.optimize.lossless {
             ui.label(
-                RichText::new("Resizing always loses detail, so it only applies outside lossless mode.")
-                    .size(10.5)
-                    .color(theme::WARN),
+                RichText::new(
+                    "Resizing always loses detail, so it only applies outside lossless mode.",
+                )
+                .size(10.5)
+                .color(theme::WARN),
             );
         }
 
@@ -1569,7 +1603,10 @@ impl ConvertXApp {
             "Overwrite the originals instead of writing copies",
         );
         ui.add_enabled_ui(self.optimize_in_place, |ui| {
-            ui.checkbox(&mut self.optimize_backup, "Keep a .orig backup when overwriting");
+            ui.checkbox(
+                &mut self.optimize_backup,
+                "Keep a .orig backup when overwriting",
+            );
         });
 
         ui.add_space(8.0);
@@ -1645,14 +1682,12 @@ impl ConvertXApp {
                 )
                 .on_hover_text(dir.to_string_lossy().to_string())
                 .clicked()
-            {
-                if let Some(folder) = rfd::FileDialog::new()
+                && let Some(folder) = rfd::FileDialog::new()
                     .set_title("Choose output folder")
                     .pick_folder()
-                {
-                    self.settings.output_dir = folder.to_string_lossy().into_owned();
-                    self.settings.save();
-                }
+            {
+                self.settings.output_dir = folder.to_string_lossy().into_owned();
+                self.settings.save();
             }
             if ui.small_button("Open").clicked() {
                 let _ = std::fs::create_dir_all(&dir);
@@ -1673,12 +1708,20 @@ impl ConvertXApp {
                 let label = if self.running {
                     format!(
                         "{} {}/{}…",
-                        if optimizing { "Optimizing" } else { "Converting" },
+                        if optimizing {
+                            "Optimizing"
+                        } else {
+                            "Converting"
+                        },
                         self.batch_done,
                         self.batch_total
                     )
                 } else if ready_jobs == 0 {
-                    if optimizing { "Optimize".to_string() } else { "Convert".to_string() }
+                    if optimizing {
+                        "Optimize".to_string()
+                    } else {
+                        "Convert".to_string()
+                    }
                 } else if optimizing {
                     format!("Optimize {ready_jobs} image(s)")
                 } else {
@@ -1757,32 +1800,36 @@ impl ConvertXApp {
                     let mut install: Option<String> = None;
                     let mut locate: Option<String> = None;
                     let mut reset: Option<Vec<String>> = None;
-                    let specs: Vec<(String, String, String, bool, Option<String>, Vec<String>, bool)> = self
+                    let specs: Vec<ConverterRow> = self
                         .registry
                         .converters()
                         .iter()
                         .map(|spec| {
                             let status = self.tools.status_of(&spec.id);
-                            (
-                                spec.id.clone(),
-                                spec.name.clone(),
-                                spec.description.clone(),
-                                status.map(|s| s.available).unwrap_or(false),
-                                status.and_then(|s| s.version.clone()),
-                                status.map(|s| s.missing.clone()).unwrap_or_default(),
-                                spec.builtin,
-                            )
+                            ConverterRow {
+                                id: spec.id.clone(),
+                                name: spec.name.clone(),
+                                description: spec.description.clone(),
+                                installed: status.map(|s| s.available).unwrap_or(false),
+                                version: status.and_then(|s| s.version.clone()),
+                                missing: status.map(|s| s.missing.clone()).unwrap_or_default(),
+                                builtin: spec.builtin,
+                                binaries: spec.binaries.clone(),
+                            }
                         })
                         .collect();
 
-                    for (id, name, description, installed, version, missing, builtin) in specs {
-                        let binaries: Vec<String> = self
-                            .registry
-                            .converters()
-                            .iter()
-                            .find(|spec| spec.id == id)
-                            .map(|spec| spec.binaries.clone())
-                            .unwrap_or_default();
+                    for ConverterRow {
+                        id,
+                        name,
+                        description,
+                        installed,
+                        version,
+                        missing,
+                        builtin,
+                        binaries,
+                    } in specs
+                    {
                         let location = self
                             .tools
                             .status_of(&id)
@@ -1991,8 +2038,8 @@ impl ConvertXApp {
                         ui.label(RichText::new("· AGPL-3.0").size(10.5).color(theme::MUTED));
                     });
 
-                    if let Some(binary) = locate {
-                        if let Some(path) = rfd::FileDialog::new()
+                    if let Some(binary) = locate
+                        && let Some(path) = rfd::FileDialog::new()
                             .set_title(format!("Locate {binary}"))
                             .pick_file()
                         {
@@ -2003,7 +2050,6 @@ impl ConvertXApp {
                             self.settings.save();
                             self.detect_tools(ctx);
                         }
-                    }
                     if let Some(binaries) = reset {
                         for binary in binaries {
                             self.settings.custom_paths.remove(&binary);
@@ -2061,7 +2107,11 @@ impl ConvertXApp {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         for entry in &self.history {
-                            let color = if entry.ok { theme::SUCCESS } else { theme::ERROR };
+                            let color = if entry.ok {
+                                theme::SUCCESS
+                            } else {
+                                theme::ERROR
+                            };
                             egui::Frame::new()
                                 .fill(theme::CARD)
                                 .corner_radius(CornerRadius::same(8))
@@ -2081,13 +2131,10 @@ impl ConvertXApp {
                                             .strong(),
                                         );
                                         ui.label(
-                                            RichText::new(format!(
-                                                "{} → {}",
-                                                entry.from, entry.to
-                                            ))
-                                            .size(10.5)
-                                            .color(theme::ACCENT)
-                                            .monospace(),
+                                            RichText::new(format!("{} → {}", entry.from, entry.to))
+                                                .size(10.5)
+                                                .color(theme::ACCENT)
+                                                .monospace(),
                                         );
                                         ui.label(
                                             RichText::new(&entry.converter)
@@ -2297,7 +2344,11 @@ fn format_row(
         } else {
             theme::CARD
         };
-        let stroke = if selected { theme::ACCENT } else { theme::BORDER };
+        let stroke = if selected {
+            theme::ACCENT
+        } else {
+            theme::BORDER
+        };
         ui.painter().rect(
             rect.shrink(1.0),
             CornerRadius::same(8),
@@ -2440,7 +2491,7 @@ fn short_path(path: &Path, max: usize) -> String {
 #[cfg(test)]
 mod ui_tests {
     use super::*;
-    use egui::{pos2, vec2, Rect};
+    use egui::{Rect, pos2, vec2};
 
     fn sample_files() -> Vec<PathBuf> {
         let dir = std::env::temp_dir().join(format!("convertx-ui-{}", std::process::id()));

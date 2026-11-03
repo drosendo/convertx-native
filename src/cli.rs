@@ -3,7 +3,7 @@
 
 use crate::convert::{self, ConvertOptions, ConvertRequest};
 use crate::optimize::{self, OptimizeOptions};
-use crate::registry::{canonical_format, human_size, normalize_input, normalize_output, Registry};
+use crate::registry::{Registry, canonical_format, human_size, normalize_input, normalize_output};
 use crate::settings::Settings;
 use crate::tools::Toolchain;
 use std::path::{Path, PathBuf};
@@ -66,8 +66,9 @@ fn parse(args: &[String]) -> Result<Args, String> {
             }
             "--out" | "-o" => {
                 index += 1;
-                parsed.out =
-                    Some(PathBuf::from(args.get(index).ok_or("--out needs a folder")?));
+                parsed.out = Some(PathBuf::from(
+                    args.get(index).ok_or("--out needs a folder")?,
+                ));
             }
             "--via" => {
                 index += 1;
@@ -239,20 +240,16 @@ fn convert_files(parsed: &Args, target: &str, tools: &Toolchain, settings: &Sett
         }
     }
 
-    if failures == 0 {
-        0
-    } else {
-        1
-    }
+    if failures == 0 { 0 } else { 1 }
 }
 
 fn optimize_files(parsed: &Args, settings: &Settings) -> i32 {
     let dir = output_dir(parsed, settings);
-    if !parsed.in_place {
-        if let Err(err) = std::fs::create_dir_all(&dir) {
-            eprintln!("error: cannot create {}: {err}", dir.display());
-            return 1;
-        }
+    if !parsed.in_place
+        && let Err(err) = std::fs::create_dir_all(&dir)
+    {
+        eprintln!("error: cannot create {}: {err}", dir.display());
+        return 1;
     }
 
     let options = OptimizeOptions {
@@ -285,7 +282,8 @@ fn optimize_files(parsed: &Args, settings: &Settings) -> i32 {
                 .file_stem()
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "image".into());
-            let output = convert::unique_output_path(&dir, &format!("{stem}-min"), &extension, &taken);
+            let output =
+                convert::unique_output_path(&dir, &format!("{stem}-min"), &extension, &taken);
             taken.push(output.clone());
             optimize::optimize(input, &output, &options)
         };
@@ -305,11 +303,7 @@ fn optimize_files(parsed: &Args, settings: &Settings) -> i32 {
     if saved_total > 0 {
         println!("\nSaved {} in total", human_size(saved_total));
     }
-    if failures == 0 {
-        0
-    } else {
-        1
-    }
+    if failures == 0 { 0 } else { 1 }
 }
 
 fn list(tools: &Toolchain) {
