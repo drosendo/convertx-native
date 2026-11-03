@@ -124,9 +124,19 @@ cargo test    # 34 tests: real conversions, optimisation, routing and UI smoke t
 ### macOS app bundle
 
 ```bash
-cargo install cargo-bundle
-cargo bundle --release
-open target/release/bundle/osx/ConvertX.app
+./tools/package_macos.sh      # builds dist/ConvertX.app with icon and version info
+open dist/ConvertX.app
+```
+
+Then drag `dist/ConvertX.app` into `/Applications` so it shows up in Launchpad,
+Spotlight and the Dock. The bundle is signed ad-hoc, which is enough for local
+use; Gatekeeper will still warn on a machine that did not build it (right-click →
+Open the first time).
+
+You can also launch without the bundle:
+
+```bash
+cargo run --release            # or: ./target/release/convertx
 ```
 
 ## Configuration

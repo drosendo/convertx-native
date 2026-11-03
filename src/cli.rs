@@ -19,6 +19,7 @@ USAGE
 
 OPTIONS
   --to <format>      target format, e.g. pdf, jpg, mp3, csv
+  --via <converter>  force one converter instead of picking the best
   --out <dir>        output folder (defaults to the one in settings)
   --optimize         optimize images instead of converting
   --quality <1-100>  use lossy re-encoding (default is lossless)
@@ -37,6 +38,7 @@ EXAMPLES
 #[derive(Debug, Default)]
 struct Args {
     to: Option<String>,
+    via: Option<String>,
     out: Option<PathBuf>,
     optimize: bool,
     quality: Option<u8>,
@@ -66,6 +68,14 @@ fn parse(args: &[String]) -> Result<Args, String> {
                 index += 1;
                 parsed.out =
                     Some(PathBuf::from(args.get(index).ok_or("--out needs a folder")?));
+            }
+            "--via" => {
+                index += 1;
+                parsed.via = Some(
+                    args.get(index)
+                        .ok_or("--via needs a converter id, e.g. --via native-svg")?
+                        .to_lowercase(),
+                );
             }
             "--optimize" | "-O" => parsed.optimize = true,
             "--quality" | "-q" => {
@@ -202,12 +212,15 @@ fn convert_files(parsed: &Args, target: &str, tools: &Toolchain, settings: &Sett
             input: input.clone(),
             from,
             to: target.to_string(),
-            converter_id: String::new(),
+            converter_id: parsed.via.clone().unwrap_or_default(),
             output: output.clone(),
             options: options.clone(),
         };
 
-        let result = convert::run_chain(&request, tools);
+        let result = match parsed.via.as_deref() {
+            Some(_) => convert::run(&request, tools),
+            None => convert::run_chain(&request, tools),
+        };
         if result.ok {
             let size = std::fs::metadata(&output).map(|m| m.len()).unwrap_or(0);
             println!(
