@@ -94,7 +94,7 @@ jobs:
       - name: Package Android APK
         if: matrix.artifact == 'android'
         run: |
-          export ANDROID_NDK_HOME="$(ls -d "$ANDROID_HOME"/ndk/* | sort -V | tail -1)"
+          . tools/android_env.sh
           echo "NDK: $ANDROID_NDK_HOME"
           ./tools/package_android.sh
           mv dist/ConvertX-*.apk "dist/ConvertX-${{ steps.version.outputs.value }}-android.apk"

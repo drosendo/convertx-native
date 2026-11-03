@@ -68,5 +68,13 @@ jobs:
         with:
           key: android
 
+      - name: Android NDK
+        run: |
+          . tools/android_env.sh
+          echo "NDK: $ANDROID_NDK_HOME"
+          cargo install cargo-ndk --locked
+
       - name: Check the Android build compiles
-        run: cargo check --target aarch64-linux-android --lib
+        run: |
+          . tools/android_env.sh
+          cargo ndk -t arm64-v8a check --lib

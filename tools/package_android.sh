@@ -10,6 +10,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="${HOME}/.cargo/bin:${PATH}"
 
+# shellcheck source=/dev/null
+. tools/android_env.sh
+
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 if [ -z "$SDK" ] || [ ! -d "$SDK" ]; then
   echo "error: set ANDROID_HOME to your Android SDK" >&2
