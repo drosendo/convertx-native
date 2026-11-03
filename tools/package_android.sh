@@ -28,9 +28,19 @@ if [ -z "$BUILD_TOOLS" ] || [ -z "$JAR" ]; then
   exit 1
 fi
 
-ABIS="${ABIS:-arm64-v8a armeabi-v7a x86_64}"
+ABIS="${ABIS:-arm64-v8a armeabi-v7a}"
 
 echo "Building the shared library for: $ABIS"
+for abi in $ABIS; do
+  case "$abi" in
+    arm64-v8a) target=aarch64-linux-android ;;
+    armeabi-v7a) target=armv7-linux-androideabi ;;
+    x86_64) target=x86_64-linux-android ;;
+    x86) target=i686-linux-android ;;
+    *) echo "error: unknown ABI $abi" >&2; exit 1 ;;
+  esac
+  rustup target add "$target" >/dev/null 2>&1 || true
+done
 rm -rf android/lib
 args=()
 for abi in $ABIS; do args+=(-t "$abi"); done
