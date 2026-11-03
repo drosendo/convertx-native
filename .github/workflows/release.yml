@@ -61,9 +61,11 @@ jobs:
             libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
             libxi-dev libxrandr-dev libgl1-mesa-dev
 
+      # macOS is built inside package_macos.sh, which also installs the
+      # cross-compilation target when TARGET is set.
       - name: Build
-        if: matrix.artifact != 'android'
-        run: cargo build --release --locked ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }}
+        if: runner.os != 'macOS' && matrix.artifact != 'android'
+        run: cargo build --release --locked
 
       - name: Package macOS app bundle
         if: runner.os == 'macOS'
