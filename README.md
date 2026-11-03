@@ -20,7 +20,7 @@ Prebuilt releases are on the [releases page](https://github.com/drosendo/convert
 | macOS 11+ (Intel) | `ConvertX-*-macos-x64.zip` | same |
 | Windows 10+ | `convertx-*-windows-x64.zip` | unzip, run `convertx.exe` |
 | Linux (glibc) | `convertx-*-linux-x64.tar.gz` | `tar xzf`, run `./convertx` |
-| Android | built from source — see [Android](#android) | built-in engines only |
+| Android | `ConvertX-*-android.apk` | built-in engines only, see [Android](#android) |
 
 ## What makes it reliable
 
@@ -188,15 +188,17 @@ friends are unavailable. Images, SVG, spreadsheets, documents, VCF and the whole
 run in-process and need no installs.
 
 ```bash
-rustup target add aarch64-linux-android
+export ANDROID_HOME="$HOME/Library/Android/sdk"   # or wherever your SDK lives
+rustup target add aarch64-linux-android armv7-linux-androideabi
 cargo install cargo-ndk
-export ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/27.2.12479018"
-./tools/package_android.sh          # builds dist/ConvertX.apk
-adb install -r dist/ConvertX.apk
+
+./tools/package_android.sh          # resolves/installs the NDK, builds dist/ConvertX-*.apk
+adb install -r dist/ConvertX-*.apk
 ```
 
-The resulting APK is debug-signed, so it installs directly; publishing to Play would need a
-release keystore.
+The resulting APK is debug-signed, so it installs directly; publishing to Play would need a release
+keystore. Converted files land in `Android/data/com.rosendolabs.convertx/files/ConvertX`, which any
+file manager can open — no storage permission required.
 
 ## Contributing
 
