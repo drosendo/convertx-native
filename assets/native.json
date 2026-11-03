@@ -1,0 +1,376 @@
+{
+  "converters": [
+    {
+      "id": "native-images",
+      "name": "Built-in image engine",
+      "description": "Rust-native codecs. Always available, no install required.",
+      "builtin": true,
+      "priority": 900,
+      "from": {
+        "images": [
+          "png",
+          "jpeg",
+          "gif",
+          "bmp",
+          "tiff",
+          "ico",
+          "webp",
+          "tga",
+          "pnm",
+          "ppm",
+          "pgm",
+          "pbm",
+          "qoi",
+          "dds",
+          "hdr",
+          "exr"
+        ]
+      },
+      "to": {
+        "images": [
+          "png",
+          "jpeg",
+          "gif",
+          "bmp",
+          "tiff",
+          "ico",
+          "webp",
+          "tga",
+          "pnm",
+          "ppm",
+          "pgm",
+          "pbm",
+          "qoi",
+          "dds",
+          "hdr",
+          "exr"
+        ]
+      }
+    },
+    {
+      "id": "native-svg",
+      "name": "Built-in SVG rasterizer",
+      "description": "Renders SVG to bitmap with resvg. No install required.",
+      "builtin": true,
+      "priority": 901,
+      "from": {
+        "images": [
+          "svg"
+        ]
+      },
+      "to": {
+        "images": [
+          "png",
+          "jpeg",
+          "webp",
+          "tiff",
+          "ico",
+          "bmp",
+          "tga",
+          "qoi"
+        ]
+      }
+    },
+    {
+      "id": "native-sheets",
+      "name": "Built-in spreadsheet reader",
+      "description": "Reads Excel and OpenDocument sheets natively (first sheet).",
+      "builtin": true,
+      "priority": 902,
+      "from": {
+        "calc": [
+          "xlsx",
+          "xlsm",
+          "xls",
+          "xlsb",
+          "xla",
+          "xlam",
+          "ods",
+          "csv",
+          "tsv"
+        ]
+      },
+      "to": {
+        "calc": [
+          "csv",
+          "tsv",
+          "json"
+        ]
+      }
+    },
+    {
+      "id": "native-docs",
+      "name": "Built-in document reader",
+      "description": "Extracts text from DOCX, ODT, EPUB, RTF and HTML without LibreOffice.",
+      "builtin": true,
+      "priority": 903,
+      "from": {
+        "text": [
+          "docx",
+          "docm",
+          "odt",
+          "ott",
+          "epub",
+          "html",
+          "htm",
+          "xhtml",
+          "rtf",
+          "txt",
+          "markdown",
+          "commonmark",
+          "gfm"
+        ]
+      },
+      "to": {
+        "text": [
+          "txt",
+          "markdown",
+          "html"
+        ]
+      }
+    },
+    {
+      "id": "sips",
+      "name": "macOS Image Tools",
+      "description": "Built into every Mac. The only path for HEIC photos without extra installs.",
+      "platforms": [
+        "macos"
+      ],
+      "priority": 145,
+      "binaries": [
+        "sips"
+      ],
+      "version_args": [
+        "--version"
+      ],
+      "manual": "sips ships with macOS — nothing to install.",
+      "from": {
+        "images": [
+          "png",
+          "jpeg",
+          "gif",
+          "bmp",
+          "tiff",
+          "heic",
+          "heif",
+          "psd",
+          "jp2",
+          "ico",
+          "webp",
+          "avif",
+          "pdf"
+        ]
+      },
+      "to": {
+        "images": [
+          "png",
+          "jpeg",
+          "gif",
+          "bmp",
+          "tiff",
+          "heic",
+          "jp2",
+          "pdf",
+          "webp"
+        ]
+      }
+    },
+    {
+      "id": "textutil",
+      "name": "macOS textutil",
+      "description": "Built into every Mac. Converts RTF, DOCX, HTML and plain text.",
+      "platforms": [
+        "macos"
+      ],
+      "priority": 146,
+      "binaries": [
+        "textutil"
+      ],
+      "version_args": [],
+      "manual": "textutil ships with macOS — nothing to install.",
+      "from": {
+        "text": [
+          "rtf",
+          "rtfd",
+          "doc",
+          "docx",
+          "html",
+          "htm",
+          "txt",
+          "odt",
+          "wordml",
+          "webarchive"
+        ]
+      },
+      "to": {
+        "text": [
+          "txt",
+          "html",
+          "rtf",
+          "docx",
+          "doc",
+          "wordml"
+        ]
+      }
+    },
+    {
+      "id": "pdftotext",
+      "name": "Poppler pdftotext",
+      "description": "Fast, accurate text extraction from PDFs.",
+      "priority": 6,
+      "binaries": [
+        "pdftotext"
+      ],
+      "version_args": [
+        "-v"
+      ],
+      "install": {
+        "brew": [
+          "install",
+          "poppler"
+        ],
+        "apt": [
+          "install",
+          "-y",
+          "poppler-utils"
+        ],
+        "dnf": [
+          "install",
+          "-y",
+          "poppler-utils"
+        ],
+        "pacman": [
+          "-S",
+          "--noconfirm",
+          "poppler"
+        ],
+        "zypper": [
+          "install",
+          "-y",
+          "poppler-tools"
+        ]
+      },
+      "from": {
+        "text": [
+          "pdf"
+        ]
+      },
+      "to": {
+        "text": [
+          "txt"
+        ]
+      }
+    },
+    {
+      "id": "pdftoppm",
+      "name": "Poppler pdftoppm",
+      "description": "Renders PDF pages to PNG, JPEG or TIFF with the reference renderer.",
+      "priority": 11,
+      "binaries": [
+        "pdftoppm"
+      ],
+      "version_args": [
+        "-v"
+      ],
+      "install": {
+        "brew": [
+          "install",
+          "poppler"
+        ],
+        "apt": [
+          "install",
+          "-y",
+          "poppler-utils"
+        ],
+        "dnf": [
+          "install",
+          "-y",
+          "poppler-utils"
+        ],
+        "pacman": [
+          "-S",
+          "--noconfirm",
+          "poppler"
+        ],
+        "zypper": [
+          "install",
+          "-y",
+          "poppler-tools"
+        ]
+      },
+      "from": {
+        "images": [
+          "pdf"
+        ]
+      },
+      "to": {
+        "images": [
+          "png",
+          "jpeg",
+          "tiff"
+        ]
+      }
+    },
+    {
+      "id": "tesseract",
+      "name": "Tesseract OCR",
+      "description": "Reads text out of screenshots, scans and photos.",
+      "priority": 12,
+      "binaries": [
+        "tesseract"
+      ],
+      "version_args": [
+        "--version"
+      ],
+      "install": {
+        "brew": [
+          "install",
+          "tesseract"
+        ],
+        "apt": [
+          "install",
+          "-y",
+          "tesseract-ocr"
+        ],
+        "dnf": [
+          "install",
+          "-y",
+          "tesseract"
+        ],
+        "pacman": [
+          "-S",
+          "--noconfirm",
+          "tesseract"
+        ],
+        "winget": [
+          "install",
+          "--id",
+          "UB-Mannheim.TesseractOCR"
+        ],
+        "choco": [
+          "install",
+          "-y",
+          "tesseract"
+        ]
+      },
+      "from": {
+        "ocr": [
+          "png",
+          "jpeg",
+          "jpg",
+          "tif",
+          "tiff",
+          "bmp",
+          "webp",
+          "gif",
+          "pdf"
+        ]
+      },
+      "to": {
+        "ocr": [
+          "txt"
+        ]
+      }
+    }
+  ]
+}
